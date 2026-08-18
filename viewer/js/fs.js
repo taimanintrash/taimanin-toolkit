@@ -85,7 +85,6 @@ export { remoteURL };
  * {"name": "remoteEntry", "kind": "function", "params": ["path"], "module": "fs"}
  */
 function remoteEntry(path){
-  console.log("[Trace:FileSystem:remoteEntry]");
   return {name:baseOf(path),path,key:path,url:remoteURL(path),get:async()=>{
     const r=await fetch(remoteURL(path));
     if(!r.ok) throw new Error(`${r.status} ${r.statusText}: ${path}`);
@@ -174,7 +173,6 @@ export { unitOf };
  * {"name": "indexFile", "kind": "function", "params": ["e"], "module": "fs"}
  */
 function indexFile(e){
-  console.log("[Trace:FileSystem:indexFile]");
   const n=e.name; let m;
   if((m=n.match(RE.thumb))){const g=m.groups,u=unitOf(keyOf(g.id,g.form),g.id,g.form);
     u.dir=u.dir||dirOf(dirOf(e.path));
@@ -331,7 +329,7 @@ const multiCharacterName=s=>/[＆&×＋+]/.test(String(s||''));
 export { multiCharacterName };
 
 // {"name": "normCharacterName", "kind": "const", "module": "fs"}
-const normCharacterName=s=>String(s||'').replace(/[\s　・･]/g,'').toLowerCase();
+const normCharacterName=s=>String(s||'').replace(/[\s ・･]/g,'').toLowerCase();
 export { normCharacterName };
 
 // {"name": "rawCharacterName", "kind": "const", "module": "fs"}
@@ -391,7 +389,6 @@ export { sceneIdFromUnit };
  * {"name": "npcPrefix", "kind": "function", "params": ["name"], "module": "fs"}
  */
 function npcPrefix(name){
-  console.log("[Trace:FileSystem:npcPrefix]");
   const b=String(name||'').toLowerCase().replace(/_r18$/,'');
   const m=b.match(/^(.*\d)[a-z]+\d*$/);
   return m?m[1]:b;
@@ -421,6 +418,7 @@ function buildNpcIndex(){
   /* Scenario references remain included, but they are not the complete pose
      inventory: actor-controller prefabs can ship selectable keys unused by
      scripts (sdk_t001 has all 16 base poses under its controller). */
+  console.log("[Trace:FileSystem:npcPrefixLoop]");
   if(S.actorsUsed.size){
     for(const n of S.actorsUsed){
       add(n);
@@ -428,6 +426,7 @@ function buildNpcIndex(){
   }
   /* The catalog includes staged names, exact counterparts/final cuts, and every
      direct pose key declared by an original actor-controller prefab. */
+  console.log("[Trace:FileSystem:buildNpcIndex:processSourcesLoop]");
   for(const [name,source] of S.actorSources)
     if(source.kind!=='missing') add(name);
   for(const g of S.npcs.values())
@@ -484,7 +483,7 @@ function buildCharacterFamilies(){
   for(const [cid,names] of canonical)
     for(const name of names){
       const norm=normCharacterName(name);
-      const parts=String(name).trim().split(/[\s　]+/).filter(Boolean);
+      const parts=String(name).trim().split(/[\s ]+/).filter(Boolean);
       const given=normCharacterName(parts[parts.length-1]||name);
       // One-character names are real (朧 = Iga Oboro, 篝). They are kept so an
       // exact match can find them, but flagged so the profile-substring pass
@@ -590,6 +589,8 @@ async function ingest(files,sceneDefs=[]){
       hasArtAnimation:!!def.spine,
       kind:def.kind||'unit',srcLabel:def.label||''});
   }
+  console.log("[Trace:FileSystem:ingest:processFilesLoop]");
+  console.log("[Trace:FileSystem:indexFileLoop]");
   for(let i=0;i<files.length;i++){
     const e=files[i];
     const k=stem(e.name);
@@ -645,7 +646,8 @@ async function ingest(files,sceneDefs=[]){
     if(!u.thumb&&!u.thumbR18&&!u.art.size&&!u.voices.length) S.units.delete(k);
 
   if(!S.units.size&&!S.scenes.size){toast('No units or scenes recognised in that folder');return;}
-  $('#empty').style.display='none';
+  const emptyEl = document.getElementById('empty');
+  if (emptyEl) emptyEl.style.display = 'none';
   buildChips(); setTab(S.units.size?'units':'scenes');
   toast(`${S.units.size} units · ${S.scenes.size} scenes`);
 }

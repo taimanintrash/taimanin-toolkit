@@ -6,6 +6,9 @@ import { buildActor, disposeSceneSpine, joinVoiceMetadata, openScene, renderUnit
 import { RE, S, normVar } from './state.js';
 import { closeLightbox, openLightbox, renderLightbox, toast } from './ui.js';
 
+// DOM helper functions to replace jQuery dependencies
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => document.querySelectorAll(selector);
 
 // {"name": "RANKS", "kind": "const", "module": "units"}
 const RANKS=[[1,'C'],[2,'R'],[3,'HR'],[4,'SR']];
@@ -20,7 +23,7 @@ export { rankKey };
  */
 function buildChips(){
   console.log("[Trace:Units:buildChips]");
-  const c=$('#chips'); c.textContent='';
+  const c=$('#chips'); if(!c) return; c.textContent='';
   const chip=(key,text,cls)=>{
     const b=document.createElement('button');
     b.className='chip'+(cls?' '+cls:''); b.dataset.f=key; b.textContent=text;
@@ -147,7 +150,10 @@ const io=new IntersectionObserver(async es=>{
     if(!ent) continue;                        // continue, not return — other rows still need loading
     try{ img.src=await blobURL(ent); img.onload=()=>img.classList.add('on'); }catch(_){}
   }
-},{root:$('#list'),rootMargin:'340px'});
+},{
+  get root() { return $('#list') || null; },
+  rootMargin:'340px'
+});
 export { io };
 
 /**
@@ -155,7 +161,7 @@ export { io };
  */
 function render(){
   console.log("[Trace:Units:render]");
-  const L=$('#list'); L.textContent='';
+  const L=$('#list'); if(!L) return; L.textContent='';
   $('#cnt').textContent=`${S.view.length} ${S.tab==='units'?'unit':'scene'}${S.view.length===1?'':'s'}`;
   const fr=document.createDocumentFragment();
   for(const k of S.view){
@@ -200,7 +206,7 @@ export { render };
  */
 function sizeGrid(){
   console.log("[Trace:Units:sizeGrid]");
-  const L=$('#list');
+  const L=$('#list'); if(!L) return;
   if(!L.classList.contains('units')) return;
   const c=L.querySelector('.card'); if(!c) return;
   const w=c.getBoundingClientRect().width;
@@ -285,6 +291,7 @@ async function openNpc(k){
     if(el) frame.appendChild(el); else cell.classList.add('miss');
   }
 }
+openNpc._token=0;
 export { openNpc };
 
 /**
@@ -614,7 +621,7 @@ async function showUnitSpine(){
   const model=S.unitMode==='art'?u?.artSpine:S.unitMode==='chibi'?u?.spine:null;
   if(!model) return;
   disposeUnitSpine();
-  const stage=$('#ustage'); stage.textContent='';
+  const stage=$('#ustage'); if(!stage) return; stage.textContent='';
   const canvas=document.createElement('canvas');
   canvas.setAttribute('aria-label',`${model.name} Spine animation`);
   attachSpineZoom(canvas,()=>S.unitSpine);
