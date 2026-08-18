@@ -1,0 +1,7 @@
+# Install with:  pip install -r requirements.txt
+#
+# The viewer (viewer/taimanin_server.py) needs nothing beyond the Python
+# standard library. This file exists only to document that the viewer has no
+# third-party runtime dependencies.
+#
+# No package listed here is required to run open_viewer.bat.

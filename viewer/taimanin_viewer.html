@@ -1,0 +1,2757 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Taimanin Viewer — Units &amp; Scenes</title>
+<style>
+:root{
+  --bg:#0e1014; --bg-2:#14171d; --bg-3:#1b1f27; --line:#272c36;
+  --fg:#e7e9ee; --fg-2:#a2a9b8; --fg-3:#6b7385;
+  --accent:#e0457b; --accent-2:#ff6b9d; --accent-dim:#e0457b26;
+  --r18:#ff4d6d; --radius:10px; --stage:#08090c;
+  --shadow:0 8px 30px #0009;
+}
+:root[data-theme="light"]{
+  --bg:#f4f5f8; --bg-2:#fff; --bg-3:#eceef3; --line:#dcdfe7;
+  --fg:#161922; --fg-2:#525a6c; --fg-3:#8a93a6;
+  --accent:#c62c62; --accent-2:#e0457b; --accent-dim:#c62c6218;
+  --stage:#dfe2ea; --shadow:0 8px 30px #0000001a;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+::-webkit-scrollbar-thumb:hover{background:var(--fg-3)}
+
+#app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:auto 1fr;
+  grid-template-areas:"top top" "side main";height:100vh}
+#topbar{grid-area:top;display:flex;align-items:center;gap:10px;padding:9px 14px;
+  background:var(--bg-2);border-bottom:1px solid var(--line);min-width:0}
+#topbar h1{font-size:14px;font-weight:650;margin:0;white-space:nowrap}
+#side{grid-area:side}#main{grid-area:main}
+#app.wide{grid-template-columns:0 1fr}
+#app.wide #side{display:none}
+@media (max-width:900px){#app{grid-template-columns:1fr}#side{display:none}#app.browse #side{display:flex}#app.browse #main{display:none}}
+
+/* ---------------- sidebar ---------------- */
+#side{background:var(--bg-2);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;gap:9px;padding:13px 14px 10px}
+.brand h1{font-size:14px;font-weight:650;margin:0}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.sp{flex:1}
+.iconbtn{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--fg-2)}
+.iconbtn:hover{background:var(--bg-3);color:var(--fg)}
+
+.tabs{display:flex;gap:2px;margin-left:6px}
+.tabs button{padding:6px 14px;border-radius:8px;background:var(--bg-3);color:var(--fg-2);font-size:13px;font-weight:550}
+.tabs button[aria-selected="true"]{background:var(--accent);color:#fff}
+
+.tools{padding:12px 12px 10px;display:flex;flex-direction:column;gap:8px}
+.langrow{display:flex;align-items:center;gap:8px}
+.langrow .seg{flex:1}
+.langrow .seg button{flex:1;padding:5px 4px;font-size:12px;white-space:nowrap}
+.langrow .seg button[disabled]{opacity:.4;cursor:not-allowed}
+.search{position:relative}
+.search input{width:100%;padding:9px 12px 9px 32px;border-radius:8px;background:var(--bg-3);
+  border:1px solid transparent;color:var(--fg);font:inherit;outline:none}
+.search input:focus{border-color:var(--accent);background:var(--bg)}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--fg-3)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 10px;border-radius:999px;background:var(--bg-3);color:var(--fg-2);font-size:12px;border:1px solid transparent}
+.chip:hover{color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--accent-dim);color:var(--accent-2);border-color:var(--accent)}
+.chip.rank{padding:4px 8px;font-variant-numeric:tabular-nums}
+.chipsep{flex-basis:100%;height:0}
+.count{padding:0 15px 8px;font-size:12px;color:var(--fg-3);display:flex;justify-content:space-between}
+
+#list{flex:1;min-height:0;overflow-y:auto;padding:0 12px 16px}
+/* grid-auto-rows is set from JS (sizeGrid) to the measured column width.
+   aspect-ratio CANNOT be used here: inside a scrolling flex item the column
+   width is circular, so the row collapses to content height and the cards
+   overlap. An explicit row height is the only reliable way to get squares. */
+#list.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
+  gap:8px;align-content:start;grid-auto-rows:76px}
+#list.scenes{display:flex;flex-direction:column;gap:6px}
+
+.card{position:relative;border-radius:9px;overflow:hidden;background:var(--bg-3);
+  border:2px solid transparent;cursor:pointer;transition:.12s}
+.card:hover{border-color:var(--fg-3)}
+.card[aria-selected="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s;display:block}
+.card img.on{opacity:1}
+.card .id{position:absolute;left:0;right:0;bottom:0;padding:8px 3px 3px;font:10px/1 ui-monospace,monospace;
+  color:#fff;text-align:center;background:linear-gradient(transparent,#000c)}
+.card .r18{position:absolute;top:3px;right:3px;font:9px/1 ui-monospace,monospace;font-weight:700;
+  background:var(--r18);color:#fff;padding:2px 3px;border-radius:3px}
+.card .artbadge{position:absolute;top:3px;left:3px;padding:3px 5px;border-radius:4px;
+  background:#5634d8e8;color:#fff;font:9px/1 ui-monospace,monospace;font-weight:700}
+
+.srow{display:flex;gap:9px;align-items:center;padding:6px;border-radius:9px;background:var(--bg-3);
+  border:1px solid transparent;cursor:pointer}
+.srow:hover{border-color:var(--line)}
+.srow[aria-selected="true"]{border-color:var(--accent);background:var(--accent-dim)}
+.srow img{width:64px;height:36px;object-fit:cover;border-radius:5px;background:var(--bg);flex:none;opacity:0;transition:.25s}
+.srow img.on{opacity:1}
+.srow .m{min-width:0}
+.srow .t{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .s{font:10.5px ui-monospace,monospace;color:var(--fg-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* NPC rows carry a composed preview of the character's first pose; there is no
+   shipped thumbnail for these, so it is built from the sprite pieces on demand. */
+.nrow{display:flex;gap:10px;align-items:center;padding:6px;border-radius:10px;background:var(--bg-3);
+  border:1px solid transparent;cursor:pointer;text-align:left}
+.nrow:hover{border-color:var(--line)}
+.nrow[aria-selected="true"]{border-color:var(--accent);background:var(--accent-dim)}
+.nrow .nthumb{position:relative;width:72px;aspect-ratio:1280/760;flex:none;border-radius:6px;
+  background:var(--stage);overflow:hidden;opacity:0;transition:opacity .25s}
+.nrow .nthumb.on{opacity:1}
+.nrow .nthumb .composite{position:absolute;inset:0;width:100%;height:100%}
+.nrow .nthumb .composite img{position:absolute;transform:translate(-50%,-50%)}
+.nrow .m{min-width:0}
+.nrow .t{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .s{font:10.5px ui-monospace,monospace;color:var(--fg-3)}
+.spinebadge{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:4px;
+  background:var(--accent-dim);color:var(--accent-2);font:9px ui-monospace,monospace}
+
+/* ---------------- main ---------------- */
+#main{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+#empty{flex:1;display:grid;place-items:center;padding:36px;text-align:center}
+#empty h2{font-size:20px;margin:0 0 8px}
+#empty p{color:var(--fg-2);margin:0 0 16px;max-width:520px}
+.big{background:var(--accent);color:#fff;padding:11px 22px;border-radius:9px;font-weight:600}
+.big:hover{background:var(--accent-2)}
+.hint{margin-top:16px;font-size:12px;color:var(--fg-3);line-height:1.75;text-align:left;
+  background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;max-width:520px}
+.hint code{font:11px ui-monospace,monospace;color:var(--fg-2)}
+.hint b{color:var(--fg-2);font-weight:600}
+
+.pane{flex:1;display:none;flex-direction:column;min-height:0}
+.pane.on{display:flex}
+.dhead{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.dhead h2{font-size:16px;margin:0;font-weight:650}
+.dhead .sub{font:11.5px ui-monospace,monospace;color:var(--fg-3)}
+.seg{display:flex;background:var(--bg-3);border-radius:8px;padding:2px;gap:2px}
+#poseseg{flex-wrap:wrap}
+.seg button{padding:5px 11px;border-radius:6px;font-size:13px;color:var(--fg-2)}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--bg);color:var(--fg);box-shadow:0 1px 3px #0004}
+.seg button.r18on[aria-pressed="true"]{background:var(--r18);color:#fff}
+.lbl{font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:.6px}
+
+/* unit stage */
+.stagewrap{flex:1;position:relative;min-height:0;background:var(--stage);overflow:hidden;display:grid;place-items:center}
+.stagewrap.checker{background-image:
+  linear-gradient(45deg,#ffffff08 25%,transparent 25%),linear-gradient(-45deg,#ffffff08 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,#ffffff08 75%),linear-gradient(-45deg,transparent 75%,#ffffff08 75%);
+  background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+#ustage{position:relative;width:100%;height:100%}
+#ustage img{position:absolute;left:50%;top:50%;transform-origin:center;opacity:0;transition:opacity .16s;cursor:zoom-in}
+#ustage img.on{opacity:1}
+#ustage canvas,.spine-layer canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.spine-controls{display:flex;align-items:center;gap:6px}
+.spine-controls[hidden],#viewseg[hidden]{display:none}
+.spine-controls select{max-width:220px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;
+  background:var(--bg-3);color:var(--fg);font:12px ui-monospace,monospace}
+.dbar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--line);background:var(--bg-2);flex-wrap:wrap}
+/* Unit pane: stage on the left, profile + voice lines in a column beside it, so
+   the art keeps the full height instead of being squeezed above two stacked
+   panels. Collapses back to stacked on a narrow window. */
+.ubody{flex:1;display:grid;grid-template-columns:1fr var(--uside,380px);min-height:0;min-width:0}
+.ustagecol{display:flex;flex-direction:column;min-width:0;min-height:0}
+.uside{border-left:1px solid var(--line);background:var(--bg-2);
+  display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+#app.noside .ubody{grid-template-columns:1fr 0}
+#app.noside .uside{display:none}
+.usidehead{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;
+  border-bottom:1px solid var(--line);font-size:11.5px;color:var(--fg-3);
+  text-transform:uppercase;letter-spacing:.04em;flex:0 0 auto}
+.usidehead .iconbtn{padding:2px 7px;font-size:15px;line-height:1}
+/* Re-opening a collapsed panel needs a control that is NOT inside it. */
+#sideshow{position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:30;
+  display:none;padding:14px 5px;border-radius:0 8px 8px 0;font-size:15px;line-height:1;
+  background:var(--bg-3);color:var(--fg-2);border:1px solid var(--line);border-left:none}
+#sideshow:hover{color:var(--fg);background:var(--bg-2)}
+#app.wide #sideshow{display:block}
+#usideshow{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:30;
+  display:none;padding:14px 5px;border-radius:8px 0 0 8px;font-size:15px;line-height:1;
+  background:var(--bg-3);color:var(--fg-2);border:1px solid var(--line);border-right:none}
+#usideshow:hover{color:var(--fg);background:var(--bg-2)}
+#app.noside #paneU.on ~ #usideshow,#app.noside #usideshow{display:block}
+#voices{background:var(--bg-2);flex:1 1 auto;min-height:0;overflow-y:auto;padding:8px 16px 14px}
+#uinfo{background:var(--bg-2);padding:10px 16px;flex:0 1 auto;max-height:52%;overflow:auto;
+  border-bottom:1px solid var(--line)}
+@media (max-width:1200px){
+  .ubody{grid-template-columns:1fr}
+  .uside{border-left:none;border-top:1px solid var(--line);max-height:46vh}
+  #app.noside .ubody{grid-template-columns:1fr}
+}
+.ucredits{display:flex;gap:12px;flex-wrap:wrap;color:var(--fg-2);font-size:12px;margin-bottom:6px}
+.ucredits b{color:var(--fg);font-weight:600}
+.uprofile{margin:0;color:var(--fg-2);font-size:12.5px;line-height:1.55;white-space:pre-wrap}
+.uskills{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.uskill{background:var(--bg-3);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:11.5px;color:var(--fg-2)}
+.uskill b{color:var(--fg);font-weight:600}
+.uvariations{display:grid;gap:7px;margin-top:9px}
+.uvar-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.uvar-group .lbl{min-width:120px;color:var(--fg-2);text-transform:none;letter-spacing:0}
+.uvar{padding:5px 9px;border-radius:7px;background:var(--bg-3);color:var(--fg-2);
+  border:1px solid var(--line);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uvar:hover{border-color:var(--accent);color:var(--accent-2)}
+.uvar[aria-current="true"]{background:var(--accent-dim);border-color:var(--accent);color:var(--accent-2)}
+.uscenes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+.uscene{padding:5px 9px;border-radius:7px;background:var(--accent-dim);color:var(--accent-2);border:1px solid var(--accent)}
+.uscene:hover{background:var(--accent);color:#fff}
+.vgroup{margin-top:9px}
+.vgroup h4{margin:0 0 5px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--fg-3);font-weight:600}
+.vlist{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:6px}
+.vitem{display:flex;align-items:flex-start;gap:8px;background:var(--bg-3);border-radius:7px;padding:5px}
+.vbtn{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;background:var(--bg-3);
+  color:var(--fg-2);font-size:12px;border:1px solid transparent;flex:none}
+.vbtn:hover{color:var(--fg);border-color:var(--line)}
+.vbtn.playing{background:var(--accent-dim);color:var(--accent-2);border-color:var(--accent)}
+.vbtn:disabled{cursor:default;opacity:.4}
+.vbtn .n{font:11px ui-monospace,monospace;color:var(--fg-3)}
+.vtext{font-size:12px;line-height:1.45;color:var(--fg-2);padding:3px 4px;white-space:pre-wrap}
+.none{color:var(--fg-3);font-size:12px;padding:6px 0}
+
+/* ---------------- ADV player ---------------- */
+#advwrap{flex:1;min-height:0;background:#000;display:grid;place-items:center;position:relative;overflow:hidden}
+#adv{position:relative;width:100%;max-width:calc((100vh - 190px) * 1.7778);aspect-ratio:16/9;
+  background:#000;overflow:hidden;user-select:none;cursor:pointer}
+#adv .layer{position:absolute;inset:0}
+#adv .layer img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain}
+#lEV canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#lSP{pointer-events:none}
+/* actor art is 1280x760 on a 1280x720 stage -> anchor to the bottom, never stretch */
+/* Hover preview for a variation link. */
+/* NPC cut sheet: every pose of one ADV character, each composed on the shared
+   1280x760 canvas so they are directly comparable. */
+.cutsheet{flex:1;overflow:auto;padding:16px;display:grid;gap:14px;align-content:start;
+  grid-template-columns:repeat(auto-fill,minmax(var(--cut,260px),1fr))}
+.cutcell{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  cursor:zoom-in;transition:border-color .12s,transform .12s,box-shadow .12s;text-align:left}
+.cutcell:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 22px #0007}
+.cutcell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cutcell .frame{position:relative;aspect-ratio:1280/760;background:var(--stage);overflow:hidden;
+  background-image:
+    linear-gradient(45deg,#ffffff08 25%,transparent 25%,transparent 75%,#ffffff08 75%),
+    linear-gradient(45deg,#ffffff08 25%,transparent 25%,transparent 75%,#ffffff08 75%);
+  background-size:18px 18px;background-position:0 0,9px 9px}
+.cutcell .frame .composite{position:absolute;inset:0;width:100%;height:100%}
+.cutcell .frame .composite img{position:absolute;transform:translate(-50%,-50%)}
+.cutcell .cap{display:flex;align-items:center;gap:6px;padding:7px 10px;
+  font:11px ui-monospace,monospace;color:var(--fg-2);border-top:1px solid var(--line)}
+.cutcell .cap .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cutcell .cap .tag{padding:1px 6px;border-radius:999px;font-size:9.5px;font-weight:700;
+  background:var(--bg-3);color:var(--fg-3);letter-spacing:.03em}
+.cutcell .cap .tag.p{background:var(--accent-dim);color:var(--accent-2)}
+.cutcell .cap .vpick{display:flex;gap:2px}
+.cutcell .cap .vpick button{padding:2px 5px;border-radius:4px;background:var(--bg-3);
+  color:var(--fg-3);font:9px ui-monospace,monospace}
+.cutcell .cap .vpick button.on{background:var(--accent);color:#fff}
+.cutcell.miss{border-color:var(--r18)}
+.cutcell.miss .cap .n{color:var(--r18)}
+.cardtip{position:fixed;z-index:60;width:160px;height:174px;padding:5px;border-radius:10px;
+  background:var(--bg-2);border:1px solid var(--line);box-shadow:0 10px 30px #000a;
+  opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s;
+  pointer-events:none;display:grid;place-items:center;overflow:hidden}
+.cardtip.on{opacity:1;transform:translateY(0)}
+.cardtip img{max-width:100%;max-height:100%;border-radius:7px;display:block}
+#adv .actors>img{height:105.56%;top:auto;bottom:0;width:auto;left:50%;transform:translateX(-50%);object-fit:contain}
+/* Composite actor: a 1280x760 authored canvas scaled to the stage, with each
+   piece centred on its own offset inside it. */
+#adv .actors>.composite{position:absolute;height:105.56%;aspect-ratio:1280/760;
+  top:auto;bottom:0;left:50%;transform:translateX(-50%)}
+#adv .actors>.composite img{position:absolute;transform:translate(-50%,-50%)}
+#adv .actors>img[data-x="LEFT"],#adv .actors>.composite[data-x="LEFT"]{left:25%}
+#adv .actors>img[data-x="RIGHT"],#adv .actors>.composite[data-x="RIGHT"]{left:75%}
+#adv.cgmode #tbox,#adv.cgmode #lAC,#adv.cgmode #lBG{display:none}
+.cg-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:44px;height:64px;
+  border-radius:8px;background:#08090c99;color:#fff;font-size:28px;display:none;place-items:center}
+#adv.cgmode .cg-nav{display:grid}
+.cg-prev{left:10px}.cg-next{right:10px}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#adv.quake{animation:qk .5s linear}
+@keyframes qk{0%,100%{transform:translate(0)}20%{transform:translate(-8px,4px)}40%{transform:translate(7px,-5px)}60%{transform:translate(-5px,-3px)}80%{transform:translate(5px,3px)}}
+
+#tbox{position:absolute;left:0;right:0;bottom:0;padding:14px 20px 18px;
+  background:linear-gradient(transparent,#000b 22%,#000e);color:#fff;transition:opacity .2s}
+#tbox.off,#tbox.manual-off{opacity:0;pointer-events:none}
+#tname{font-weight:700;font-size:15px;color:var(--accent-2);margin-bottom:4px;min-height:20px;
+  text-shadow:0 2px 6px #000}
+#ttext{font-size:15.5px;line-height:1.65;white-space:pre-wrap;min-height:4.6em;text-shadow:0 2px 6px #000}
+#tnext{position:absolute;right:16px;bottom:10px;color:#fff9;font-size:12px;animation:bl 1.4s infinite}
+@keyframes bl{50%{opacity:.25}}
+
+.advbar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--line);
+  background:var(--bg-2);flex-wrap:wrap}
+.advbar input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.pill{padding:5px 11px;border-radius:7px;background:var(--bg-3);color:var(--fg-2);font-size:12.5px}
+.pill:hover{color:var(--fg)}
+.pill[aria-pressed="true"]{background:var(--accent);color:#fff}
+.pos{font:11.5px ui-monospace,monospace;color:var(--fg-3);min-width:96px;text-align:right}
+
+#log{position:absolute;inset:0;background:#000000e6;backdrop-filter:blur(3px);overflow-y:auto;
+  padding:22px 26px;display:none;z-index:5}
+#log.on{display:block}
+/* Full-scene transcript. A per-step dialogue box gives a page translator one
+   short line at a time, replaced on every advance, which is why an extension
+   never covers it. This renders every line of the scene at once so a single
+   translate pass gets the lot; `lang` is set from the content, as on the box. */
+#script{position:absolute;inset:0;background:#000000f2;backdrop-filter:blur(3px);
+  overflow-y:auto;padding:22px 26px;display:none;z-index:6}
+#script.on{display:block}
+#script .e{margin-bottom:13px;color:#e9e9ef;max-width:820px}
+#script .e b{color:var(--accent-2);display:block;font-size:12.5px;margin-bottom:2px}
+#script .e p{margin:0;white-space:pre-wrap;font-size:14.5px;line-height:1.7}
+#script .hd{color:var(--fg-3);font-size:12px;margin-bottom:14px}
+#log .e{margin-bottom:13px;color:#e9e9ef;max-width:780px}
+#log .e b{color:var(--accent-2);display:block;font-size:12.5px;margin-bottom:2px}
+#log .e p{margin:0;white-space:pre-wrap;font-size:14px;line-height:1.6}
+#log .e button{color:var(--fg-3);font-size:11px;margin-top:3px}
+#log .e button:hover{color:var(--accent-2)}
+
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bg-3);
+  border:1px solid var(--line);border-radius:9px;padding:9px 16px;font-size:13px;box-shadow:var(--shadow);
+  opacity:0;pointer-events:none;transition:.2s;z-index:80}
+.toast.on{opacity:1}
+.bar{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;transition:width .2s;z-index:90}
+#lightbox{position:fixed;inset:0;z-index:100;display:none;background:#050609ed;align-items:center;justify-content:center}
+#lightbox.on{display:flex}
+#lightbox img{max-width:calc(100vw - 120px);max-height:calc(100vh - 80px);object-fit:contain}
+#lightbox .nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:64px;border-radius:9px;
+  background:#171a22cc;color:#fff;font-size:30px}
+#lightbox .prev{left:18px}#lightbox .next{right:18px}
+/* A composed actor is a stack of positioned images, not one <img>, so the
+   lightbox needs a correctly-proportioned box to lay it out in. */
+#lightbox .lbcomp{position:relative;aspect-ratio:1280/760;background:var(--stage);
+  width:min(calc(100vw - 120px),calc((100vh - 120px) * 1280 / 760));
+  border-radius:10px;overflow:hidden}
+#lightbox .lbcomp .composite{position:absolute;inset:0;width:100%;height:100%}
+#lightbox .lbcomp .composite img{position:absolute;transform:translate(-50%,-50%)}
+#lightbox .close{position:absolute;right:18px;top:14px;width:38px;height:38px;border-radius:50%;background:#171a22cc;color:#fff;font-size:24px}
+#lightbox .caption{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:6px 12px;border-radius:7px;
+  background:#171a22dd;color:#fff;font-size:12px}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div id="app">
+<header id="topbar">
+  <span class="dot"></span><h1>Taimanin Viewer</h1>
+  <nav class="tabs">
+    <button id="tabU" aria-selected="true">Units</button>
+    <button id="tabS" aria-selected="false">Scenes</button>
+    <button id="tabN" aria-selected="false">Story</button>
+    <button id="tabC" aria-selected="false">NPC</button>
+  </nav>
+  <span class="sp"></span>
+    <button class="iconbtn" id="reopen" title="Choose folder">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+    <button class="iconbtn" id="sidetoggle" title="Collapse the browser list (\)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+    <button class="iconbtn" id="theme" title="Theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+</header>
+
+
+<aside id="side">
+  <div class="tools">
+    <div class="search">
+      <input id="q" type="search" placeholder="Search…" autocomplete="off" spellcheck="false">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </div>
+    <div class="langrow">
+      <span class="lbl">Text</span>
+      <div class="seg" id="langseg">
+        <button data-lang="en" aria-pressed="true" title="English translation">EN</button>
+        <button data-lang="ja" aria-pressed="false" title="Original Japanese">日本語</button>
+        <button data-lang="ko" aria-pressed="false" title="Shipped Korean">한국어</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="count"><span id="cnt"></span><span id="scanning"></span></div>
+  <div id="list" class="units"></div>
+</aside>
+
+<main id="main">
+  <button id="sideshow" title="Show the browser list (\)" aria-label="Show the browser list">›</button>
+  <button id="usideshow" title="Show the profile / voice panel" aria-label="Show panel">‹</button>
+  <div id="empty">
+    <div>
+      <h2>Open your Taimanin folder</h2>
+      <p>Start <code>taimanin_server.py</code> for automatic loading. Files remain on this machine and are fetched directly from disk on demand—nothing is copied or uploaded. The folder button remains available as a fallback.</p>
+      <button class="big" id="pick">Choose folder manually…</button>
+      <div class="hint">
+        The integrated server reads only <code>taimanin_assets/</code>: extracted
+        unit art, ADV scripts, audio, and Spine model sets. Large media folders
+        are opened on demand, so start-up stays fast.
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ UNITS ============ -->
+  <section class="pane" id="paneU">
+    <div class="dhead">
+      <div><h2 id="utitle">—</h2><div class="sub" id="usub"></div></div><span class="sp"></span>
+      <div class="seg" id="fitseg">
+        <button data-fit="canvas" aria-pressed="true" title="Full authored canvas — variants stay pixel-aligned">Canvas</button>
+        <button data-fit="subject" aria-pressed="false" title="Zoom to the art using one shared frame for all variants">Subject</button>
+      </div>
+    </div>
+    <div class="ubody">
+    <div class="ustagecol">
+    <div class="stagewrap checker" id="ustagewrap"><div id="ustage"></div></div>
+    <div class="dbar">
+      <div class="seg" id="viewseg" hidden>
+        <button data-view="image" aria-pressed="true">Image</button>
+        <button data-view="chibi" aria-pressed="false">Chibi</button>
+        <button data-view="art" aria-pressed="false">Art</button>
+      </div>
+      <span class="lbl">Images</span><div class="seg" id="poseseg"></div>
+      <div class="spine-controls" id="uspinecontrols" hidden>
+        <span class="lbl">Animation</span><select id="uspineanim"></select>
+        <button class="pill" id="uspineplay" aria-pressed="true">Pause</button>
+      </div>
+      <span class="sp"></span>
+      <div class="seg"><button id="chk" aria-pressed="true">Alpha</button></div>
+      <div class="seg"><button id="infotoggle" aria-pressed="true" title="Show or hide the profile / voice panel">Info</button></div>
+    </div>
+    </div><!-- /.ustagecol -->
+    <aside class="uside" id="uside">
+      <div class="usidehead">
+        <span>Profile &amp; voice lines</span><span class="sp"></span>
+        <button class="iconbtn" id="usidehide" title="Hide this panel" aria-label="Hide panel">›</button>
+      </div>
+      <div id="uinfo"></div>
+      <div id="voices"></div>
+    </aside>
+    </div><!-- /.ubody -->
+  </section>
+
+  <!-- ============ NPC / CUT SHEET ============ -->
+  <section class="pane" id="paneC">
+    <div class="dhead">
+      <div><h2 id="ctitle">—</h2><div class="sub" id="csub"></div></div><span class="sp"></span>
+      <div class="seg" id="csizeseg">
+        <button data-csize="s" aria-pressed="false">Small</button>
+        <button data-csize="m" aria-pressed="true">Medium</button>
+        <button data-csize="l" aria-pressed="false">Large</button>
+      </div>
+    </div>
+    <div id="cutsheet" class="cutsheet"></div>
+  </section>
+
+  <!-- ============ SCENES ============ -->
+  <section class="pane" id="paneS">
+    <div class="dhead">
+      <div><h2 id="stitle">—</h2><div class="sub" id="ssub"></div></div><span class="sp"></span>
+      <button class="pill" id="logbtn">History</button>
+      <button class="pill" id="scriptbtn" title="Whole scene as text — one surface a page translator can do in a single pass">Script</button>
+      <button class="pill" id="texttoggle" aria-pressed="false">Hide text</button>
+      <button class="pill" id="spinetoggle" aria-pressed="true" hidden>Spine: On</button>
+      <button class="pill" id="cgmode" aria-pressed="false">CG mode</button>
+      <button class="pill" id="widebtn" title="Hide the list">Wide</button>
+    </div>
+    <div id="advwrap">
+      <div id="adv">
+        <div class="layer" id="lBG"></div>
+        <div class="layer" id="lEV"></div>
+        <div class="layer spine-layer" id="lSP"></div>
+        <div class="layer actors" id="lAC"></div>
+        <div id="flash"></div>
+        <button class="cg-nav cg-prev" id="cgprev" aria-label="Previous line or CG">‹</button>
+        <button class="cg-nav cg-next" id="cgnext" aria-label="Next line, CG, or scene">›</button>
+        <div id="tbox"><div id="tname"></div><div id="ttext"></div><div id="tnext">▼</div></div>
+      </div>
+      <div id="log"></div>
+      <div id="script" lang="ja"></div>
+    </div>
+    <div class="advbar">
+      <button class="pill" id="rew">⟲ Back</button>
+      <button class="pill" id="play">▶ Auto</button>
+      <div class="spine-controls" id="sspinecontrols" hidden>
+        <span class="lbl">Animation</span><select id="sspineanim"></select>
+        <button class="pill" id="sspineplay" aria-pressed="true">Pause</button>
+      </div>
+      <input type="range" id="seek" min="0" max="0" value="0">
+      <span class="pos" id="pos">0 / 0</span>
+      <button class="pill" id="mute" aria-pressed="false">🔊</button>
+    </div>
+  </section>
+</main>
+</div>
+
+<div id="lightbox" aria-hidden="true">
+  <button class="close" aria-label="Close">×</button>
+  <button class="nav prev" aria-label="Previous image">‹</button>
+  <img alt="">
+  <div class="lbcomp" hidden></div>
+  <button class="nav next" aria-label="Next image">›</button>
+  <div class="caption"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fallback" webkitdirectory directory multiple hidden>
+
+<script src="vendor/spine-3.6-binary/spine-webgl.js"></script>
+<script src="taimanin_spine.js"></script>
+<script>
+'use strict';
+/* ===================================================================
+   Taimanin Viewer — Units + Scenes in one local page.
+
+   * Reads files in place through the File System Access API (or a plain
+     directory input as fallback). Nothing is uploaded or copied.
+   * Units, scenes and Spine sets are discovered only under
+     taimanin_assets. The deprecated standalone viewer is not indexed.
+   * Huge media folders (images/ voices/ AudioClip/) are NOT walked at
+     start-up — 148k files would take minutes. Their directory handle is
+     kept and enumerated only when that unit or scene is opened.
+   =================================================================== */
+
+const $ = s=>document.querySelector(s), $$ = s=>[...document.querySelectorAll(s)];
+const LAZY = new Set(['images','voices','audioclip']);
+
+const VAR='(?:r18|u17|v)(?:_(?:r18|u17|v))?';
+const RE={
+  /* `kar_c` is deliberately NOT accepted here. Those are TABA collection cards
+     (extracted/unit_art/r18_image_kar_l) and they number in their OWN id space,
+     so kar_c00003 is card 3, not unit 00003 — yet the shared \d{5} capture made
+     them collide. r18_image_kar_l is indexed after every r18_image_chr_* folder
+     and art slots are assigned last-wins, so the card silently replaced the
+     unit's real R18 art: 304 units lost 608 real R18 poses that way, Crackle
+     (uni_00003) among them. TABA cards have their own viewer; they do not
+     belong in unit art. Only 3 of 392 card ids have no unit of the same number,
+     so nothing meaningful is hidden by dropping them here. */
+  art  : new RegExp(`^(?:uni_?|bos_?)(?<id>\\d{5})(?:_(?<form>\\d+))?_?(?<var>${VAR}_)?l_(?<idx>\\d+)\\.(?:png|jpg|webp)$`,'i'),
+  thumb: new RegExp(`^(?:uni_?|kar_c|bos_?)(?<id>\\d{5})(?:_(?<form>\\d+))?_?(?<var>${VAR}_)?s\\.(?:png|jpg|webp)$`,'i'),
+  voice: new RegExp(`^uni(?<id>\\d{5})_(?<form>\\d+)_(?<type>[a-z]+?)(?:_(?<var>${VAR}))?_(?<idx>\\d+)\\.(?:ogg|mp3|wav|m4a)$`,'i'),
+};
+const keyOf=(id,f)=>(+(f||1)>1)?`${id}_${f}`:id;
+const normVar=v=>(v||'base').replace(/_$/,'').toLowerCase();
+const VOICE_LABEL={new:'Acquired',hom:'Home',atk:'Attack',dmg:'Damaged',evo:'Awakening',
+  lup:'Level Up',rdy:'Battle Start',res:'Result',wav:'Wave',msr:'Mission'};
+const VOICE_ORDER=['new','hom','rdy','atk','dmg','wav','msr','evo','lup','res'];
+
+const S={
+  tab:'units',
+  lang:localStorage.getItem('tmv-lang')||'en',
+  en:new Map(), enMeta:null,
+  units:new Map(), scenes:new Map(),
+  metadata:new Map(),
+  sceneUnits:new Map(),
+  characterFamilies:new Map(), unitCharacters:new Map(), characterLabels:new Map(),
+  realCidByName:new Map(),   // JA character name -> non-999 character_id
+  actorSources:new Map(), actorAuthored:new Map(), actorRaw:new Map(),
+  actorCanvas:[1280,760],
+  npcs:new Map(), cutSize:'m', cutPoses:[], cutIndex:0,
+  actorsUsed:new Set(),      // sprite names ADV scripts actually stage
+  positions:new Map(),
+  spineModels:new Map(), spineLoose:new Map(),
+  pool:new Map(),          // "basename" (no ext, lower) -> entry
+  lazy:new Map(),          // dirPath -> {handle}|{entries}
+  order:[], view:[], sel:null,
+  artIndex:0, fit:'canvas',
+  filters:new Set(),
+  urls:new Map(), pinned:new Set(), bbox:new Map(), metrics:new Map(), actorBounds:new Map(),
+  sceneOffsets:new Map(),
+  audio:null, bgm:null, voice:null, muted:false,
+  unitMode:'image', unitSpine:null, sceneSpine:null,
+  cgMode:false, sceneSpineEnabled:true,
+  adv:null,
+};
+
+const toast=(m,ms=2400)=>{const t=$('#toast');t.textContent=m;t.classList.add('on');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),ms);};
+const prog=p=>{const b=$('#bar');b.style.width=(p*100)+'%';if(p>=1)setTimeout(()=>b.style.width=0,400);};
+const stem=n=>n.replace(/\.[^.]+$/,'').toLowerCase();
+const dirOf=p=>p.split('/').slice(0,-1).join('/');
+const baseOf=p=>p.split('/').pop();
+/* ---------------------------------------------------------------- language
+   Every displayed string funnels through localText(), so English is applied
+   here and nowhere else. S.en maps the JAPANESE SOURCE STRING to its
+   translation (tables/strings_en.json), which means a string that was never
+   translated just falls through to the original — the toggle is lossless and
+   'ja'/'ko' still read straight from units.json. */
+const localText=v=>{
+  if(v==null) return '';
+  if(typeof v==='string')
+    return (S.lang==='en'&&S.en.get(v))||v;
+  if(S.lang==='en'){
+    const t=S.en.get(v.ja);
+    if(t) return t;
+  }
+  return v[S.lang]||v.ja||v.ko||Object.values(v).find(Boolean)||'';
+};
+
+/* ------------------------------------------------ file access + cache */
+async function blobURL(e){
+  if(!e) return null;
+  if(S.urls.has(e.key)) return S.urls.get(e.key);
+  const url=URL.createObjectURL(await e.get());
+  S.urls.set(e.key,url);
+  if(S.urls.size>260){
+    for(const k of [...S.urls.keys()]){
+      if(S.urls.size<=180) break;
+      if(S.pinned.has(k)) continue;
+      URL.revokeObjectURL(S.urls.get(k)); S.urls.delete(k);
+    }
+  }
+  return url;
+}
+async function listLazy(path){
+  const b=S.lazy.get(path); if(!b) return [];
+  if(b.entries) return b.entries;
+  if(b.cached) return b.cached;
+  if(b.remote){
+    try{
+      const r=await fetch('/__taimanin_list__?path='+encodeURIComponent(path));
+      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      b.cached=(await r.json()).map(name=>remoteEntry(path+'/'+name));
+    }catch(err){console.warn('remote lazy',path,err);b.cached=[];}
+    return b.cached;
+  }
+  const out=[];
+  try{
+    for await (const [name,h] of b.handle.entries())
+      if(h.kind==='file'){const p=path+'/'+name;out.push({name,path:p,key:p,get:()=>h.getFile()});}
+  }catch(err){ console.warn('lazy',path,err); }
+  b.cached=out; return out;
+}
+const remoteURL=path=>'/'+path.split('/').map(encodeURIComponent).join('/');
+function remoteEntry(path){
+  return {name:baseOf(path),path,key:path,url:remoteURL(path),get:async()=>{
+    const r=await fetch(remoteURL(path));
+    if(!r.ok) throw new Error(`${r.status} ${r.statusText}: ${path}`);
+    return r.blob();
+  }};
+}
+/* stem -> entry map for a lazy dir, built once. Scenes reference hundreds of
+   voices, so a linear scan per lookup would be O(refs x files). */
+async function mapOf(path){
+  const b=S.lazy.get(path); if(!b) return null;
+  if(b.map) return b.map;
+  const m=new Map();
+  for(const e of await listLazy(path)) if(!m.has(stem(e.name))) m.set(stem(e.name),e);
+  b.map=m; return m;
+}
+/* resolve an asset name from a script tag: scene-local first, then global pool */
+async function resolve(name, localPaths=[]){
+  if(!name) return null;
+  const want=stem(name);
+  for(const p of localPaths){
+    const m=await mapOf(p);
+    const hit=m&&m.get(want);
+    if(hit) return hit;
+  }
+  return S.pool.get(want)||null;
+}
+
+/* ------------------------------------------------------------- walking */
+async function walkDir(dir, path, files){
+  for await (const [name,h] of dir.entries()){
+    const p = path? path+'/'+name : name;
+    if(h.kind==='directory'){
+      if(LAZY.has(name.toLowerCase())) S.lazy.set(p,{handle:h});
+      else await walkDir(h,p,files);
+    }else files.push({name,path:p,key:p,get:()=>h.getFile()});
+    if((files.length&2047)===0){$('#scanning').textContent='scanning '+files.length;await new Promise(r=>setTimeout(r));}
+  }
+}
+function fromFileList(list){
+  const files=[];
+  for(const f of list){
+    const p=f.webkitRelativePath||f.name;
+    const parent=dirOf(p), pname=baseOf(parent).toLowerCase();
+    const e={name:f.name,path:p,key:p,get:async()=>f};
+    if(LAZY.has(pname)){
+      if(!S.lazy.has(parent)) S.lazy.set(parent,{entries:[]});
+      S.lazy.get(parent).entries.push(e);
+    }else files.push(e);
+  }
+  return files;
+}
+
+/* -------------------------------------------------------------- index */
+function unitOf(key,id,form){
+  let u=S.units.get(key);
+  if(!u){u={key,id,form:+(form||1),dir:'',thumb:null,thumbR18:null,art:new Map(),
+            voices:[],variants:new Set(),loaded:false};S.units.set(key,u);}
+  return u;
+}
+function indexFile(e){
+  const n=e.name; let m;
+  if((m=n.match(RE.thumb))){const g=m.groups,u=unitOf(keyOf(g.id,g.form),g.id,g.form);
+    u.dir=u.dir||dirOf(dirOf(e.path));
+    if(/r18/i.test(g.var||'')) u.thumbR18=e; else u.thumb=e; return true;}
+  if((m=n.match(RE.art))){const g=m.groups,u=unitOf(keyOf(g.id,g.form),g.id,g.form);
+    u.dir=u.dir||dirOf(dirOf(e.path));
+    const v=normVar(g.var),p=+g.idx;
+    if(!u.art.has(p)) u.art.set(p,{});
+    u.art.get(p)[v]=e; u.variants.add(v); return true;}
+  if((m=n.match(RE.voice))){const g=m.groups,u=unitOf(keyOf(g.id,g.form),g.id,g.form);
+    u.voices.push({entry:e,form:+g.form,type:g.type.toLowerCase(),variant:normVar(g.var),idx:+g.idx,name:n});
+    return true;}
+  return false;
+}
+
+const spineLoose=name=>String(name||'').toLowerCase().replace(/\d+/g,n=>String(+n)).replace(/[^a-z0-9]/g,'');
+function indexSpineModels(files){
+  S.spineModels.clear(); S.spineLoose.clear();
+  const eligible=files.filter(e=>/^taimanin_assets\/extracted\/spine\//i.test(e.path));
+  const atlases=new Map();
+  for(const e of eligible){
+    if(!/\.atlas$/i.test(e.name)) continue;
+    const d=dirOf(e.path);
+    if(!atlases.has(d)) atlases.set(d,[]);
+    atlases.get(d).push(e);
+  }
+  const put=(key,model,score)=>{
+    key=String(key||'').toLowerCase();
+    const old=S.spineModels.get(key);
+    if(!old||score>old.score) S.spineModels.set(key,{...model,score});
+  };
+  const groups=new Map();
+  for(const skel of eligible){
+    if(!/\.skel$/i.test(skel.name)||!skel.url) continue;
+    const exact=stem(skel.name);
+    const list=atlases.get(dirOf(skel.path))||[];
+    const exactAtlas=list.find(a=>stem(a.name)===exact);
+    const base=exactAtlas?exact:exact.replace(/_\d{2}$/,'');
+    const atlas=exactAtlas||list.find(a=>stem(a.name)===base)
+      ||list.find(a=>spineLoose(stem(a.name))===spineLoose(base));
+    if(!atlas||!atlas.url) continue;
+    const suffix=exactAtlas?'':(exact.match(/_(\d{2})$/)?.[1]||'');
+    const model={name:base,exact,variant:suffix,skel,atlas,
+      skelURL:skel.url,atlasURL:atlas.url};
+    const groupKey=`${dirOf(skel.path).toLowerCase()}|${base.toLowerCase()}`;
+    if(!groups.has(groupKey)) groups.set(groupKey,[]);
+    groups.get(groupKey).push(model);
+  }
+  for(const variants of groups.values()){
+    variants.sort((a,b)=>(a.variant||'00').localeCompare(b.variant||'00',undefined,{numeric:true}));
+    const primary=variants.find(v=>!v.variant)||variants.find(v=>v.variant==='01')||variants[0];
+    const combined={...primary,variants};
+    put(primary.name,combined,primary.variant?2:4);
+    for(const variant of variants) put(variant.exact,{...variant,variants},3);
+    const loose=spineLoose(primary.name),old=S.spineLoose.get(loose);
+    if(!old||(primary.variant?2:4)>old.score)
+      S.spineLoose.set(loose,{...combined,score:primary.variant?2:4});
+  }
+}
+function findSpineModel(name){
+  return S.spineModels.get(String(name||'').toLowerCase())
+    ||S.spineLoose.get(spineLoose(name))||null;
+}
+
+/* tables/strings_en.json is written by translation/tools/export_strings.py.
+   Absent, the viewer behaves exactly as before and the EN button reports why. */
+async function loadTranslations(files){
+  S.en.clear(); S.enMeta=null;
+  const hit=files.find(e=>e.name.toLowerCase()==='strings_en.json');
+  if(!hit) return;
+  try{
+    const data=JSON.parse(await (await hit.get()).text());
+    const strings=data&&data.strings?data.strings:data;
+    for(const k in strings) if(strings[k]) S.en.set(k,strings[k]);
+    S.enMeta=data&&data._meta||null;
+  }catch(err){
+    console.warn('translations',err);
+    toast('Could not read strings_en.json');
+  }
+  syncLangUI();
+}
+
+/* Fully audited source selection for every staged/NPC actor. Rendering consults
+   this manifest exclusively. */
+async function loadActorSources(files){
+  S.actorSources.clear();
+  const hit=files.find(e=>e.name.toLowerCase()==='actor_sources.json');
+  if(!hit) return;
+  try{
+    const data=JSON.parse(await (await hit.get()).text());
+    if(Array.isArray(data._meta?.canvas)&&data._meta.canvas.length===2)
+      S.actorCanvas=data._meta.canvas;
+    for(const [name,source] of Object.entries(data.sources||{}))
+      S.actorSources.set(name.toLowerCase(),source);
+  }catch(err){
+    console.warn('actor sources',err);
+    toast('Could not read actor_sources.json');
+  }
+}
+
+async function loadUnitMetadata(files){
+  S.metadata.clear(); S.characterFamilies.clear(); S.unitCharacters.clear();
+  S.characterLabels.clear(); S.realCidByName.clear();
+  const candidates=files.filter(e=>e.name.toLowerCase()==='units.json')
+    .sort((a,b)=>(/\/tables\/units\.json$/i.test(b.path)?1:0)-(/\/tables\/units\.json$/i.test(a.path)?1:0));
+  if(!candidates.length) return;
+  try{
+    const data=JSON.parse(await (await candidates[0].get()).text());
+    if(!Array.isArray(data)) throw new Error('root is not an array');
+    const byGraphic=new Map();
+    for(const m of data){
+      if(m&&m.unit_id) S.metadata.set(String(m.unit_id).toLowerCase(),m);
+      const gid=String(m?.graphic_id||'').toLowerCase();
+      if(gid&&!byGraphic.has(gid)) byGraphic.set(gid,m);
+    }
+    for(const u of S.units.values())
+      u.meta=S.metadata.get(`uni${u.id}_${u.form}`)||byGraphic.get(`uni_${u.id}`)||null;
+    buildRealCidIndex();       // must precede grouping: it resolves the 999 rows
+    buildCharacterFamilies();
+  }catch(err){
+    console.warn('unit metadata',err);
+    toast('Could not read tables/units.json');
+  }
+}
+const multiCharacterName=s=>/[＆&×＋+]/.test(String(s||''));
+const normCharacterName=s=>String(s||'').replace(/[\s　・･]/g,'').toLowerCase();
+/* Identity is matched on the JAPANESE name, never the displayed one: it is the
+   stable key across the EN/JA/KO toggle, and two characters whose names happen
+   to translate alike must not merge into one family. */
+const rawCharacterName=m=>normCharacterName(m?.name?.ja||localText(m?.name));
+
+/* 999 is a reused fallback character_id in newer rows, not one real character.
+   Keying those rows by name alone still split a character in two whenever SOME
+   of her cards carry a real id and the newer ones carry 999 — Akiyama Rinko had
+   27 cards under id 1 but 【花嫁御寮】/【正道を歩むバニー】/【猪突除霊】 under 999,
+   so they listed as a separate character with no variation links between them.
+   Resolve 999 to the real id of an identically-named card when one exists, and
+   fall back to a name key only for characters that appear solely under 999. */
+function buildRealCidIndex(){
+  S.realCidByName.clear();
+  for(const m of S.metadata.values()){
+    const cid=Number(m?.character_id);
+    if(!Number.isFinite(cid)||cid===999) continue;
+    const n=rawCharacterName(m);
+    if(!n||multiCharacterName(n)||S.realCidByName.has(n)) continue;
+    S.realCidByName.set(n,cid);
+  }
+}
+function characterFamilyId(m){
+  const cid=Number(m?.character_id);
+  if(cid!==999) return cid;
+  const n=rawCharacterName(m);
+  const real=S.realCidByName.get(n);
+  return real===undefined?`name:${n}`:real;
+}
+function unitKeyFromId(id){
+  const m=String(id||'').match(/^uni(\d{5})_(\d+)$/i);
+  return m?keyOf(m[1],m[2]):null;
+}
+function sceneIdFromUnit(u){
+  const m=String(u?.meta?.spine_id||'').match(/^chr_(\d+)$/i);
+  return m?String(+m[1]):null;
+}
+/* Group every ADV sprite into one entry per character. A name is
+   `<character><pose>`, where the pose is trailing letters (plus an optional
+   index) that FOLLOW a digit — the digit test is what stops `chr_t0424` being
+   shortened to `chr_`, since `t0424` is part of the character id, not a pose. */
+function npcPrefix(name){
+  const b=String(name||'').toLowerCase().replace(/_r18$/,'');
+  const m=b.match(/^(.*\d)[a-z]+\d*$/);
+  return m?m[1]:b;
+}
+function buildNpcIndex(){
+  S.npcs.clear();
+  const add=n=>{
+    const source=S.actorSources.get(n);
+    if(source?.duplicate_of) n=source.duplicate_of;
+    const base=n.endsWith('_r18')?n.slice(0,-4):n;
+    const canonical=n.endsWith('_r18')&&S.actorSources.has(base)?base:n;
+    const k=npcPrefix(canonical);
+    if(!k) return;
+    let g=S.npcs.get(k);
+    if(!g){g={key:k,poses:[],versions:new Map()};S.npcs.set(k,g);}
+    if(!g.poses.includes(canonical)) g.poses.push(canonical);
+    let versions=g.versions.get(canonical);
+    if(!versions){versions={base:null,r18:null};g.versions.set(canonical,versions);}
+    if(n.endsWith('_r18')) versions.r18=n; else versions.base=n;
+  };
+  /* Scenario references remain included, but they are not the complete pose
+     inventory: actor-controller prefabs can ship selectable keys unused by
+     scripts (sdk_t001 has all 16 base poses under its controller). */
+  if(S.actorsUsed.size){
+    for(const n of S.actorsUsed){
+      add(n);
+    }
+  }
+  /* The catalog includes staged names, exact counterparts/final cuts, and every
+     direct pose key declared by an original actor-controller prefab. */
+  for(const [name,source] of S.actorSources)
+    if(source.kind!=='missing') add(name);
+  for(const g of S.npcs.values())
+    g.poses.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+}
+
+function buildSceneUnitIndex(){
+  S.sceneUnits.clear();
+  for(const u of S.units.values()){
+    const rootKey=unitKeyFromId(u.meta?.root_unit_id||u.meta?.unit_id);
+    if(!rootKey||u.key!==rootKey) continue;
+    const id=sceneIdFromUnit(u); if(!id) continue;
+    if(!S.sceneUnits.has(id)) S.sceneUnits.set(id,[]);
+    const list=S.sceneUnits.get(id);
+    if(!list.some(x=>x.key===u.key)) list.push(u);
+  }
+}
+function buildCharacterFamilies(){
+  S.characterFamilies.clear(); S.unitCharacters.clear(); S.characterLabels.clear();
+  const roots=new Map(),canonical=new Map();
+  for(const u of S.units.values()){
+    const m=u.meta,rootKey=unitKeyFromId(m?.root_unit_id||m?.unit_id);
+    if(!m||!rootKey||!S.units.has(rootKey)||roots.has(rootKey)) continue;
+    roots.set(rootKey,S.units.get(rootKey));
+    // Match on Japanese, label in the display language. Matching a name against
+    // profile text only works if BOTH are the same language, and translation
+    // coverage is partial — an English name would be hunted for inside a profile
+    // still showing Japanese and never found.
+    const cid=characterFamilyId(m),name=m?.name?.ja||localText(m.name);
+    if((typeof cid==='number'&&!Number.isFinite(cid))||!name||multiCharacterName(name)) continue;
+    if(!canonical.has(cid)) canonical.set(cid,[]);
+    const list=canonical.get(cid);
+    if(!list.some(x=>normCharacterName(x)===normCharacterName(name))) list.push(name);
+    const label=localText(m.name);
+    const old=S.characterLabels.get(cid);
+    if(label&&(!old||(!localText(m.w2_name)&&label.length<old.length)))
+      S.characterLabels.set(cid,label);
+  }
+  // `given` is the personal name — the last space-separated token of the
+  // Japanese 「surname given」 form. Dual cards decorate the GIVEN name
+  // (風神アスカ, 雷神ゆきかぜ), so that is what a card part can be matched against.
+  const candidates=[];
+  for(const [cid,names] of canonical)
+    for(const name of names){
+      const norm=normCharacterName(name);
+      const parts=String(name).trim().split(/[\s　]+/).filter(Boolean);
+      const given=normCharacterName(parts[parts.length-1]||name);
+      // One-character names are real (朧 = Iga Oboro, 篝). They are kept so an
+      // exact match can find them, but flagged so the profile-substring pass
+      // below skips them — a single kanji hits inside unrelated prose.
+      if(norm.length>=1) candidates.push({cid,name,norm,given,short:norm.length<2});
+    }
+
+  for(const [rootKey,u] of roots){
+    const m=u.meta,cid=characterFamilyId(m);
+    const name=m?.name?.ja||localText(m.name);
+    let ids=(typeof cid==='string'||Number.isFinite(cid))?[cid]:[];
+    if(multiCharacterName(name)){
+      const profile=normCharacterName(m?.profile?.ja||localText(m.profile));
+      const found=[];
+      // Dual-card profiles usually spell out both full character names. Prefer
+      // those authoritative matches over trying to split decorated card names.
+      for(const c of candidates)
+        if(c.cid!==cid&&typeof c.cid==='number'&&!c.short
+           &&profile.includes(c.norm)&&!found.includes(c.cid)) found.push(c.cid);
+      if(found.length<2){
+        const parts=name.split(/[＆&×＋+]/).map(normCharacterName).filter(Boolean);
+        const pool=candidates.filter(c=>c.cid!==cid&&typeof c.cid==='number');
+        for(const part of parts){
+          // Most specific first. A bare part like アサギ matches every Asagi
+          // variant by suffix (井河アサギ, クローンアサギ, ＺＥＲＯアサギ), so plain
+          // suffix matching is ambiguous and used to resolve nothing at all.
+          // An exact given-name hit picks the base character out of that set;
+          // the suffix pass then still catches a decorated part like 風神アスカ,
+          // preferring the shortest given name when several could apply.
+          let pick=null;
+          const exactName=pool.filter(c=>c.norm===part);
+          const exactGiven=pool.filter(c=>c.given===part);
+          const suffix=pool.filter(c=>c.given.length>=2&&part.endsWith(c.given));
+          if(exactName.length===1) pick=exactName[0];
+          else if(exactGiven.length===1) pick=exactGiven[0];
+          else if(suffix.length){
+            const best=suffix.slice().sort((a,b)=>a.given.length-b.given.length);
+            if(best.length===1||best[0].given.length<best[1].given.length) pick=best[0];
+          }
+          if(pick&&!found.includes(pick.cid)) found.push(pick.cid);
+        }
+      }
+      if(found.length>=2) ids=found;
+    }
+    S.unitCharacters.set(rootKey,ids);
+    for(const id of ids){
+      if(!S.characterFamilies.has(id)) S.characterFamilies.set(id,new Set());
+      S.characterFamilies.get(id).add(rootKey);
+    }
+  }
+  // Every awakening form resolves through its root card.
+  for(const u of S.units.values()){
+    const rootKey=unitKeyFromId(u.meta?.root_unit_id||u.meta?.unit_id);
+    if(rootKey&&S.unitCharacters.has(rootKey))
+      S.unitCharacters.set(u.key,S.unitCharacters.get(rootKey));
+  }
+}
+async function loadPositionMetadata(files){
+  S.positions.clear();
+  const source=files.find(e=>e.name.toLowerCase()==='positions.json');
+  if(!source) return;
+  try{
+    const data=JSON.parse(await (await source.get()).text());
+    if(!Array.isArray(data)) return;
+    for(const rec of data){
+      if(rec?.file) S.positions.set(String(rec.file).replace(/\\/g,'/').toLowerCase(),rec);
+    }
+    for(const e of files){
+      const marker='/extracted/',lower=('/'+e.path).toLowerCase(),at=lower.lastIndexOf(marker);
+      if(at>=0) e.position=S.positions.get(lower.slice(at+marker.length))||null;
+    }
+  }catch(err){console.warn('positions metadata',err);}
+}
+
+async function ingest(files,sceneDefs=[]){
+  disposeUnitSpine(); disposeSceneSpine();
+  S.units.clear(); S.scenes.clear(); S.pool.clear(); S.metadata.clear();
+  S.actorAuthored.clear(); S.actorRaw.clear();
+  S.sceneUnits.clear(); S.positions.clear();
+  S.spineModels.clear(); S.spineLoose.clear();
+  S.urls.forEach(URL.revokeObjectURL); S.urls.clear(); S.bbox.clear(); S.metrics.clear();
+  S.actorBounds.clear();
+  S.sceneOffsets.clear();
+
+  const thumbDirs=[];
+  for(const def of sceneDefs){
+    if(!def?.script) continue;
+    const script=remoteEntry(def.script),pair=def.pair?remoteEntry(def.pair):null;
+    const key=def.script,id=def.id||stem(script.name);
+    S.scenes.set(key,{key,path:def.script,id,script,img:pair,thumb:null,
+      imagesPath:'',voicesPath:'',hasSpine:!!def.spine,hasCG:!!def.cg,
+      hasArtAnimation:!!def.spine,
+      kind:def.kind||'unit',srcLabel:def.label||''});
+  }
+  for(let i=0;i<files.length;i++){
+    const e=files[i];
+    const k=stem(e.name);
+    const authored=/\/extracted\/adv\/authored_chr\//i.test('/'+(e.path||''));
+    const rawActor=('/'+(e.path||'')).match(
+      /\/extracted\/adv\/(adv_chr|r18_adv_chr)\/[^/]+$/i);
+    if(authored&&/\.png$/i.test(e.name)) S.actorAuthored.set(k,e);
+    if(rawActor&&/\.png$/i.test(e.name))
+      S.actorRaw.set(`${rawActor[1].toLowerCase()}/${e.name.toLowerCase()}`,e);
+    if(!authored&&/\.(?:png|jpe?g|webp|ogg|mp3|wav|m4a)$/i.test(e.name)&&!S.pool.has(k))
+      S.pool.set(k,e);                         // global media name -> file
+    indexFile(e);
+    if(e.name.toLowerCase()==='img.txt') thumbDirs.push(e);
+    if((i&4095)===0){prog(i/files.length);await new Promise(r=>setTimeout(r));}
+  }
+  for(const e of thumbDirs){const s=S.scenes.get(dirOf(e.path)); if(s) s.img=e;}
+  indexSpineModels(files);
+  await loadPositionMetadata(files);
+  await loadTranslations(files);   // before metadata: character grouping reads names
+  await loadActorSources(files);
+  await loadUnitMetadata(files);
+  buildSceneUnitIndex();
+  buildNpcIndex();
+  for(const u of S.units.values()){
+    u.spine=findSpineModel(u.meta?.spine_id);
+    u.artSpine=findSpineModel(`Cut_${u.meta?.spine_id||''}`);
+  }
+  // scene thumbnails: thumbnails/<PACK>/<sceneId>.jpg  ->  scenes/<sceneId>/
+  const byId=new Map();
+  for(const s of S.scenes.values()){
+    if(!byId.has(s.id)) byId.set(s.id,[]);
+    byId.get(s.id).push(s);
+  }
+  for(const e of files){
+    if(!/(^|\/)thumbnails?(\/|$)/i.test(dirOf(e.path))) continue;
+    const list=byId.get(stem(e.name));
+    if(list) for(const s of list) s.thumb=s.thumb||e;
+  }
+  // Scene IDs are graphic/Spine IDs, not card IDs. Resolve them through each
+  // root card's spine_id (for example card 00725 -> scene/Spine 0573).
+  for(const s of S.scenes.values()){
+    const m=String(s.id).match(/^(\d+)(?:_(\d+))?$/);
+    const unit=m&&S.sceneUnits.get(String(+m[1]))?.[0];
+    s.units=m?(S.sceneUnits.get(String(+m[1]))||[]):[];
+    const name=localText(unit?.meta?.display_name||unit?.meta?.name);
+    s.label=name?`${name} · Scene ${m[2]||1}`:`Scene ${s.id}`;
+    if(s.kind==='story') s.label=s.srcLabel?`${s.srcLabel} · ${s.id}`:s.id;
+    s.thumb=s.thumb||unit?.thumb||unit?.thumbR18||null;
+  }
+
+  prog(1); $('#scanning').textContent='';
+  for(const [k,u] of S.units)
+    if(!u.thumb&&!u.thumbR18&&!u.art.size&&!u.voices.length) S.units.delete(k);
+
+  if(!S.units.size&&!S.scenes.size){toast('No units or scenes recognised in that folder');return;}
+  $('#empty').style.display='none';
+  buildChips(); setTab(S.units.size?'units':'scenes');
+  toast(`${S.units.size} units · ${S.scenes.size} scenes`);
+}
+
+/* --------------------------------------------------------- persistence */
+const idb={db:null,
+  async open(){return this.db||=await new Promise((res,rej)=>{const r=indexedDB.open('tmv2',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});},
+  async set(k,v){try{const db=await this.open();return new Promise(r=>{const t=db.transaction('kv','readwrite');
+    t.objectStore('kv').put(v,k);t.oncomplete=r;});}catch(_){}},
+  async get(k){try{const db=await this.open();return new Promise(r=>{const t=db.transaction('kv','readonly');
+    const q=t.objectStore('kv').get(k);q.onsuccess=()=>r(q.result);q.onerror=()=>r(null);});}catch(_){return null}}};
+
+async function pickFolder(){
+  if(window.showDirectoryPicker){
+    let dir;
+    try{ dir=await window.showDirectoryPicker({mode:'read'}); }
+    catch(e){ if(e.name==='AbortError') return; $('#fallback').click(); return; }
+    await idb.set('dir',dir); await loadDir(dir);
+  }else $('#fallback').click();
+}
+async function loadFromServer(){
+  if(location.protocol!=='http:'&&location.protocol!=='https:') return false;
+  try{
+    const r=await fetch('/__taimanin_index__');
+    if(!r.ok) return false;
+    const data=await r.json();
+    if(!Array.isArray(data.files)||!Array.isArray(data.lazy)) return false;
+    $('#scanning').textContent='reading local index…'; S.lazy.clear();
+    for(const path of data.lazy) S.lazy.set(path,{remote:true});
+    S.actorsUsed=new Set((data.actors_used||[]).map(x=>String(x).toLowerCase()));
+    await ingest(data.files.map(remoteEntry),Array.isArray(data.scenes)?data.scenes:[]);
+    return true;
+  }catch(err){
+    console.warn('automatic local load',err);
+    return false;
+  }
+}
+async function loadDir(dir){
+  $('#scanning').textContent='reading…'; S.lazy.clear();
+  const files=[]; await walkDir(dir,'',files); await ingest(files);
+}
+$('#fallback').addEventListener('change',e=>{S.lazy.clear();ingest(fromFileList([...e.target.files]));});
+(async()=>{
+  if(await loadFromServer()) return;
+  const dir=await idb.get('dir');
+  if(dir&&dir.queryPermission){
+    if(await dir.queryPermission({mode:'read'})==='granted') return loadDir(dir);
+    $('#pick').textContent='Reopen last folder…';
+    $('#pick').onclick=async()=>{
+      if(await dir.requestPermission({mode:'read'})==='granted') return loadDir(dir);
+      pickFolder();};
+  }
+})();
+
+/* ------------------------------------------------------------ browsing */
+/* The game's rank letters. `rarity` runs 1-6, but 5 and 6 are what awakening
+   turns a rank-4 card into, not ranks a card is issued at — so only 1-4 are
+   offered, and a unit with no rarity is simply never matched. */
+const RANKS=[[1,'C'],[2,'R'],[3,'HR'],[4,'SR']];
+const rankKey=r=>`rank:${r}`;
+
+function buildChips(){
+  const c=$('#chips'); c.textContent='';
+  const chip=(key,text,cls)=>{
+    const b=document.createElement('button');
+    b.className='chip'+(cls?' '+cls:''); b.dataset.f=key; b.textContent=text;
+    b.setAttribute('aria-pressed',String(S.filters.has(key)));
+    b.onclick=()=>{S.filters.has(key)?S.filters.delete(key):S.filters.add(key);
+      b.setAttribute('aria-pressed',String(S.filters.has(key)));applyFilter();};
+    c.appendChild(b);
+    return b;
+  };
+  // Story scenes have no Spine and no thumbnails, so those two chips would only
+  // ever filter to nothing; CG is the one distinction that exists there.
+  const defs = S.tab==='units'
+    ? [['poses','Alt poses'],['voice','Voices'],['artanim','Art animation']]
+    : S.tab==='npc'   ? [['multi','Multiple poses']]
+    : S.tab==='story' ? [['cg','Has CG']]
+    : [['thumb','Has preview'],['animcg','Animated CG']];
+  for(const [k,t] of defs) chip(k,t);
+  if(S.tab!=='units') return;
+  // Rank chips are OR'd with each other (see applyFilter) but AND'd with the
+  // feature chips above, so "★5 or ★6, and has voices" is expressible.
+  const sep=document.createElement('span'); sep.className='chipsep'; c.appendChild(sep);
+  for(const [r,label] of RANKS) chip(rankKey(r),label,'rank');
+}
+function setTab(t,selectedKey=null){
+  S.tab=t; S.filters.clear(); S.sel=null; stopAll();
+  if(selectedKey) $('#q').value='';
+  $('#tabU').setAttribute('aria-selected',String(t==='units'));
+  $('#tabS').setAttribute('aria-selected',String(t==='scenes'));
+  $('#tabN').setAttribute('aria-selected',String(t==='story'));
+  $('#tabC').setAttribute('aria-selected',String(t==='npc'));
+  $('#q').placeholder = t==='units'?'Search unit id…'
+        : t==='story'?'Search story scene…'
+        : t==='npc'?'Search NPC sprite id…':'Search scene…';
+  $('#list').className = t==='units'?'units':'scenes';
+  $('#paneU').classList.remove('on');        // nothing selected yet in this tab
+  $('#paneS').classList.remove('on');
+  $('#paneC').classList.remove('on');
+  buildChips();
+  S.order = t==='npc' ? [...S.npcs.keys()].sort()
+          : t==='units' ? [...S.units.keys()].sort()
+                        : [...S.scenes.keys()]
+                            .filter(k=>(S.scenes.get(k).kind||'unit')===
+                              (t==='story'?'story':'unit'))
+                            .sort((a,b)=>{
+                            const sa=S.scenes.get(a),sb=S.scenes.get(b);
+                            return sa.id.localeCompare(sb.id,undefined,{numeric:true,sensitivity:'base'})
+                              ||sa.label.localeCompare(sb.label,undefined,{numeric:true});
+                          });
+  applyFilter();
+  // Open the first entry, otherwise the main pane sits blank with no explanation.
+  if(S.view.length){
+    const target=selectedKey&&S.view.includes(selectedKey)?selectedKey:S.view[0];
+    (t==='units'?openUnit:t==='npc'?openNpc:openScene)(target);
+    if(selectedKey){
+      requestAnimationFrame(()=>
+        $(`#list [data-k="${CSS.escape(target)}"]`)?.scrollIntoView({block:'center'}));
+    }
+  }
+}
+$('#tabU').onclick=()=>setTab('units'); $('#tabS').onclick=()=>setTab('scenes');
+$('#tabN').onclick=()=>setTab('story');
+$('#tabC').onclick=()=>setTab('npc');
+$$('#csizeseg button').forEach(b=>b.onclick=()=>{
+  S.cutSize=b.dataset.csize;
+  $$('#csizeseg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+  $('#cutsheet').style.setProperty('--cut',{s:'170px',m:'260px',l:'420px'}[S.cutSize]);
+});
+
+function applyFilter(){
+  const q=$('#q').value.trim().toLowerCase(), f=S.filters;
+  const ranks=new Set(RANKS.filter(([r])=>f.has(rankKey(r))).map(([r])=>r));
+  S.view=S.order.filter(k=>{
+    if(S.tab==='npc'){
+      const g=S.npcs.get(k);
+      if(q&&!k.includes(q)) return false;
+      if(f.has('multi')&&g.poses.length<2) return false;
+      return true;
+    }
+    if(S.tab==='units'){
+      const u=S.units.get(k);
+      const names=localText(u.meta?.display_name||u.meta?.name).toLowerCase();
+      if(q&&!k.toLowerCase().includes(q)&&!names.includes(q)) return false;
+      if(ranks.size&&!ranks.has(Number(u.meta?.rarity))) return false;
+      if(f.has('r18')&&!u.variants.has('r18')&&!u.thumbR18) return false;
+      if(f.has('poses')&&u.art.size<2) return false;
+      if(f.has('voice')&&!u.voices.length&&!S.lazy.has(u.dir+'/AudioClip')) return false;
+      if(f.has('artanim')&&!u.artSpine) return false;
+    }else{
+      const s=S.scenes.get(k);
+      if(q&&!s.label.toLowerCase().includes(q)&&!s.id.toLowerCase().includes(q)) return false;
+      if(f.has('cg')&&!s.hasCG) return false;
+      if(f.has('thumb')&&!s.thumb) return false;
+      if(f.has('animcg')&&!s.hasArtAnimation) return false;
+    }
+    return true;
+  });
+  render();
+}
+$('#q').addEventListener('input',applyFilter);
+
+const io=new IntersectionObserver(async es=>{
+  for(const e of es){
+    if(!e.isIntersecting) continue;
+    const el=e.target; io.unobserve(el);
+    if(el.dataset.kind==='npc'){
+      // The preview is a real composite, not a stored thumbnail — these
+      // characters have no shipped preview image. Built on first sight only.
+      const g=S.npcs.get(el.dataset.k), box=el.querySelector('.nthumb');
+      if(!g||!box||box.childElementCount) continue;
+      try{
+        const first=g.poses[0],versions=g.versions.get(first);
+        const c=await buildActor(versions?.base||versions?.r18||first,[]);
+        if(c){ box.appendChild(c); box.classList.add('on'); }
+      }catch(_){}
+      continue;
+    }
+    const img=el.querySelector('img'); if(!img) continue;
+    const rec = el.dataset.kind==='unit' ? S.units.get(el.dataset.k) : S.scenes.get(el.dataset.k);
+    const ent = el.dataset.kind==='unit' ? (rec?.thumb||rec?.thumbR18) : rec?.thumb;
+    if(!ent) continue;                        // continue, not return — other rows still need loading
+    try{ img.src=await blobURL(ent); img.onload=()=>img.classList.add('on'); }catch(_){}
+  }
+},{root:$('#list'),rootMargin:'340px'});
+
+function render(){
+  const L=$('#list'); L.textContent='';
+  $('#cnt').textContent=`${S.view.length} ${S.tab==='units'?'unit':'scene'}${S.view.length===1?'':'s'}`;
+  const fr=document.createDocumentFragment();
+  for(const k of S.view){
+    const el=document.createElement('div');
+    el.dataset.k=k; el.dataset.kind=S.tab==='units'?'unit':'scene';
+    el.setAttribute('aria-selected',String(k===S.sel));
+    if(S.tab==='npc'){
+      const g=S.npcs.get(k);
+      el.className='nrow'; el.dataset.kind='npc';
+      el.innerHTML=`<div class="nthumb"></div><div class="m">`+
+                   `<div class="t">${k}</div>`+
+                   `<div class="s">${g.poses.length} pose${g.poses.length===1?'':'s'}</div></div>`;
+      el.onclick=()=>openNpc(k);
+      fr.appendChild(el); io.observe(el);
+      continue;
+    }
+    if(S.tab==='units'){
+      const u=S.units.get(k); el.className='card';
+      el.innerHTML=`<img alt=""><span class="id">${u.id}${u.form>1?'·'+u.form:''}</span>`+
+                   (u.artSpine?'<span class="artbadge">ART ANIM</span>':'')+
+                   (u.variants.has('r18')||u.thumbR18?'<span class="r18">18</span>':'');
+      el.title=localText(u.meta?.display_name||u.meta?.name);
+      el.onclick=()=>openUnit(k);
+    }else{
+      const s=S.scenes.get(k); el.className='srow';
+      // Story scenes ship no thumbnail, so the <img> would just be an empty box.
+      const thumb=s.kind==='story'?'':'<img alt="">';
+      el.innerHTML=`${thumb}<div class="m"><div class="t">${s.label}</div><div class="s">${s.id}`+
+        `${s.hasArtAnimation?'<span class="spinebadge">ANIMATED CG</span>':
+          s.hasCG?'<span class="spinebadge">CG</span>':''}</div></div>`;
+      el.onclick=()=>openScene(k);
+    }
+    fr.appendChild(el); io.observe(el);
+  }
+  L.appendChild(fr);
+  sizeGrid();
+}
+
+/* Square cards: read the real column width and use it as the row height. */
+function sizeGrid(){
+  const L=$('#list');
+  if(!L.classList.contains('units')) return;
+  const c=L.querySelector('.card'); if(!c) return;
+  const w=c.getBoundingClientRect().width;
+  if(w>0) L.style.gridAutoRows=w+'px';
+}
+new ResizeObserver(()=>sizeGrid()).observe($('#list'));
+
+/* =====================================================================
+   UNITS
+   ===================================================================== */
+/* Cut sheet: every pose of one ADV character, each composed on the shared
+   1280x760 canvas. Rendering them all at the same scale is the point — it is how
+   you see that a pose is mis-sized or missing a piece. */
+async function openNpc(k){
+  closeLightbox(); disposeSceneSpine(); disposeUnitSpine(); stopAll();
+  S.sel=k; S.tab='npc';
+  $$('#list [data-k]').forEach(c=>c.setAttribute('aria-selected',String(c.dataset.k===k)));
+  $('#paneC').classList.add('on');
+  $('#paneU').classList.remove('on'); $('#paneS').classList.remove('on');
+  $('#empty').style.display='none'; $('#app').classList.remove('browse');
+
+  const g=S.npcs.get(k); if(!g) return;
+  $('#ctitle').textContent=k;
+  const sourceCounts={authored:0,parts:0,missing:0};
+  const allVersions=[];
+  for(const pose of g.poses){
+    const versions=g.versions.get(pose);
+    for(const n of [versions?.base,versions?.r18]) if(n) allVersions.push(n);
+  }
+  for(const n of allVersions){
+    const kind=S.actorSources.get(n)?.kind;
+    sourceCounts[kind==='authored'?'authored':kind==='parts'?'parts':'missing']++;
+  }
+  $('#csub').textContent=`${g.poses.length} pose${g.poses.length===1?'':'s'} · `+
+    `${allVersions.length-g.poses.length} R18 alternate${allVersions.length-g.poses.length===1?'':'s'} · `+
+    `${sourceCounts.authored} authored · ${sourceCounts.parts} composed`+
+    (sourceCounts.missing?` · ${sourceCounts.missing} missing`:'');
+  const sheet=$('#cutsheet'); sheet.textContent='';
+  sheet.style.setProperty('--cut',{s:'170px',m:'260px',l:'420px'}[S.cutSize]||'260px');
+
+  S.cutPoses=g.poses.map(pose=>{
+    const versions=g.versions.get(pose);
+    return versions?.base||versions?.r18||pose;
+  });
+  const token=++openNpc._token;
+  for(let i=0;i<g.poses.length;i++){
+    const pose=g.poses[i],versions=g.versions.get(pose);
+    const name=versions?.base||versions?.r18||pose;
+    if(token!==openNpc._token) return;         // a newer selection took over
+    const cell=document.createElement('button'); cell.className='cutcell';
+    cell.title='Open large'; cell.onclick=()=>openCut(i);
+    const frame=document.createElement('div'); frame.className='frame';
+    const cap=document.createElement('div'); cap.className='cap';
+    const source=S.actorSources.get(name);
+    const tag=source?.kind==='authored'
+      ?'<span class="tag">AUTHORED</span>'
+      :source?.kind==='parts'
+        ?'<span class="tag p">COMPOSED</span>'
+        :'<span class="tag">MISSING</span>';
+    cap.innerHTML=`<span class="n"></span>${tag}`;
+    cap.querySelector('.n').textContent=pose;
+    if(versions?.base&&versions?.r18){
+      const pick=document.createElement('span'); pick.className='vpick';
+      const show=async(chosen,button)=>{
+        S.cutPoses[i]=chosen;
+        frame.textContent=''; cell.classList.remove('miss');
+        pick.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===button));
+        const actor=await buildActor(chosen,[]);
+        if(token!==openNpc._token) return;
+        if(actor) frame.appendChild(actor); else cell.classList.add('miss');
+      };
+      for(const [label,chosen] of [['BASE',versions.base],['R18',versions.r18]]){
+        const button=document.createElement('button');
+        button.type='button'; button.textContent=label;
+        button.classList.toggle('on',chosen===name);
+        button.onclick=e=>{e.stopPropagation();show(chosen,button);};
+        pick.appendChild(button);
+      }
+      cap.appendChild(pick);
+    }
+    cell.append(frame,cap); sheet.appendChild(cell);
+    const el=await buildActor(name,[]);
+    if(token!==openNpc._token) return;
+    if(el) frame.appendChild(el); else cell.classList.add('miss');
+  }
+}
+openNpc._token=0;
+
+/* Visible-pixel bounds in the actor's authored 1280x760 coordinate system.
+   Big view uses the same subject-fit idea as unit art: prefab offsets remain
+   intact, then the complete visible result is centred and fitted as one unit. */
+async function actorContentBounds(name){
+  const key=String(name||'').toLowerCase();
+  if(S.actorBounds.has(key)) return S.actorBounds.get(key);
+  const source=S.actorSources.get(key);
+  if(!source) return null;
+  const [CW,CH]=S.actorCanvas;
+  const boxes=[];
+  if(source.kind==='authored'){
+    const entry=S.actorAuthored.get(stem((source.file||key).split('/').pop()));
+    if(entry){
+      const metric=await imageMetrics(entry),b=metric.bbox||[0,0,metric.w,metric.h];
+      boxes.push({x:b[0]/metric.w*CW,y:b[1]/metric.h*CH,
+        x1:b[2]/metric.w*CW,y1:b[3]/metric.h*CH});
+    }
+  }else for(const p of source.parts||[]){
+    const entry=S.actorRaw.get(String(p.file||'').toLowerCase());
+    if(!entry) continue;
+    const metric=await imageMetrics(entry),b=metric.bbox||[0,0,metric.w,metric.h];
+    const w=+p.w||metric.w,h=+p.h||metric.h;
+    const left=CW/2+(+p.x||0)-w/2,top=CH/2-(+p.y||0)-h/2;
+    boxes.push({x:left+b[0]/metric.w*w,y:top+b[1]/metric.h*h,
+      x1:left+b[2]/metric.w*w,y1:top+b[3]/metric.h*h});
+  }
+  if(!boxes.length){S.actorBounds.set(key,null);return null;}
+  const x=Math.min(...boxes.map(b=>b.x)),y=Math.min(...boxes.map(b=>b.y));
+  const x1=Math.max(...boxes.map(b=>b.x1)),y1=Math.max(...boxes.map(b=>b.y1));
+  const result={x,y,w:Math.max(1,x1-x),h:Math.max(1,y1-y)};
+  S.actorBounds.set(key,result); return result;
+}
+
+/* Big view of one pose. Unit art is a single <img>, but a composed actor is a
+   stack of positioned images, so the lightbox switches between an <img> and a
+   correctly-proportioned holder rather than trying to force one into the other. */
+async function openCut(i){
+  const list=S.cutPoses||[];
+  if(!list.length) return;
+  S.cutIndex=((i%list.length)+list.length)%list.length;
+  const name=list[S.cutIndex];
+  const box=$('#lightbox'), holder=$('#lightbox .lbcomp'), img=$('#lightbox img');
+  img.hidden=true; img.removeAttribute('src');
+  holder.hidden=false; holder.textContent='';
+  const el=await buildActor(name,[]);
+  if(el){
+    holder.appendChild(el);
+    const bounds=await actorContentBounds(name);
+    if(bounds){
+      const [CW,CH]=S.actorCanvas;
+      const scale=Math.min(CW/bounds.w,CH/bounds.h)*.94;
+      const centerX=bounds.x+bounds.w/2,centerY=bounds.y+bounds.h/2;
+      el.style.inset='auto';
+      el.style.left=((CW/2-centerX*scale)/CW*100)+'%';
+      el.style.top=((CH/2-centerY*scale)/CH*100)+'%';
+      el.style.width='100%'; el.style.height='100%';
+      el.style.transformOrigin='0 0';
+      el.style.transform=`scale(${scale})`;
+    }
+  }
+  $('#lightbox .caption').textContent=
+    `${name}  ·  ${S.cutIndex+1}/${list.length}`+(el?'':'  ·  no image');
+  box.classList.add('on'); box.setAttribute('aria-hidden','false');
+}
+
+async function openUnit(k){
+  closeLightbox();
+  disposeSceneSpine();
+  const changed=S.sel!==k;
+  if(changed) disposeUnitSpine();
+  S.sel=k; S.tab='units';
+  if(changed){S.artIndex=0;S.unitMode='image';}
+  $$('#list [data-k]').forEach(c=>c.setAttribute('aria-selected',String(c.dataset.k===k)));
+  const u=S.units.get(k);
+  $('#paneU').classList.add('on'); $('#paneS').classList.remove('on'); $('#empty').style.display='none';
+  $('#app').classList.remove('browse');
+  stopAll();
+
+  if(!u.loaded){                                   // pull voices on demand
+    u.loaded=true;
+    const voicePaths=[u.dir+'/AudioClip',u.dir+'/audioclip',
+      ...[...S.lazy.keys()].filter(p=>p.toLowerCase().endsWith(`/voice/${u.id}`))];
+    for(const p of new Set(voicePaths)){
+      for(const e of await listLazy(p)){
+        const m=e.name.match(RE.voice); if(!m) continue;
+        const g=m.groups;
+        u.voices.push({entry:e,form:+g.form,type:g.type.toLowerCase(),variant:normVar(g.var),idx:+g.idx,name:e.name});
+      }
+    }
+    joinVoiceMetadata(u);
+  }
+  const choices=artChoices(u);
+  const unitName=localText(u.meta?.display_name||u.meta?.name);
+  $('#utitle').textContent=unitName||`Unit ${u.id}`;
+  const clipCount=u.voices.filter(v=>v.entry).length;
+  $('#usub').textContent=`${choices.length} image${choices.length===1?'':'s'} · ${clipCount} clips`
+    +(u.spine?' · Chibi':'')+(u.artSpine?' · Art animation':'');
+
+  const ps=$('#poseseg'); ps.textContent='';
+  choices.forEach((choice,i)=>{
+    const b=document.createElement('button');
+    b.dataset.index=i; b.textContent=choice.variant==='base'?String(choice.pose):`${choice.pose} ${choice.variant.toUpperCase()}`;
+    b.onclick=()=>selectArt(i); ps.appendChild(b);
+  });
+  if((S.unitMode==='chibi'&&!u.spine)||(S.unitMode==='art'&&!u.artSpine)) S.unitMode='image';
+  $('#viewseg').hidden=!u.spine&&!u.artSpine;
+  $$('#viewseg button').forEach(b=>{
+    b.hidden=(b.dataset.view==='chibi'&&!u.spine)||(b.dataset.view==='art'&&!u.artSpine);
+    b.setAttribute('aria-pressed',String(b.dataset.view===S.unitMode));
+  });
+  $('#uspinecontrols').hidden=S.unitMode==='image';
+  if(S.artIndex>=choices.length) S.artIndex=0;
+  syncArtButtons();
+  renderUnitInfo(u); renderVoices(u);
+  if(S.unitMode!=='image') showUnitSpine(); else showArt();
+}
+function artChoices(u){
+  if(!u) return [];
+  const out=[];
+  for(const pose of [...u.art.keys()].sort((a,b)=>a-b)){
+    const set=u.art.get(pose);
+    for(const variant of Object.keys(set).sort((a,b)=>(a==='base'?-1:b==='base'?1:a.localeCompare(b))))
+      out.push({pose,variant,entry:set[variant],set});
+  }
+  return out;
+}
+const syncArtButtons=()=>$$('#poseseg button').forEach(
+  b=>b.setAttribute('aria-pressed',String(+b.dataset.index===S.artIndex)));
+async function selectArt(index){
+  const u=S.units.get(S.sel),choices=u?artChoices(u):[];
+  if(!choices.length) return;
+  S.artIndex=(index+choices.length)%choices.length;
+  syncArtButtons();
+  if(S.unitMode!=='image') await setUnitView('image');
+  await showArt();
+  if($('#lightbox').classList.contains('on')) await renderLightbox();
+}
+
+async function alphaBox(url,key){
+  if(S.bbox.has(key)) return S.bbox.get(key);
+  const img=new Image(); img.src=url; await img.decode().catch(()=>{});
+  const N=96,c=document.createElement('canvas'); c.width=c.height=N;
+  const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0,N,N);
+  let d; try{d=x.getImageData(0,0,N,N).data;}catch(_){return null;}
+  let x0=N,y0=N,x1=-1,y1=-1;
+  for(let py=0;py<N;py++)for(let px=0;px<N;px++)
+    if(d[(py*N+px)*4+3]>8){if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;}
+  const b=x1<0?[0,0,1,1]:[x0/N,y0/N,(x1-x0+1)/N,(y1-y0+1)/N];
+  S.bbox.set(key,b); return b;
+}
+async function imageMetrics(entry){
+  if(S.metrics.has(entry.key)) return S.metrics.get(entry.key);
+  const url=await blobURL(entry),img=new Image(); img.src=url; await img.decode().catch(()=>{});
+  const norm=await alphaBox(url,entry.key);
+  const value={w:img.naturalWidth||1,h:img.naturalHeight||1,
+    bbox:norm?[norm[0]*(img.naturalWidth||1),norm[1]*(img.naturalHeight||1),
+      (norm[0]+norm[2])*(img.naturalWidth||1),(norm[1]+norm[3])*(img.naturalHeight||1)]:null};
+  S.metrics.set(entry.key,value); return value;
+}
+async function showArt(){
+  const u=S.units.get(S.sel); if(!u) return;
+  if(S.unitMode!=='image') return;
+  const choices=artChoices(u),choice=choices[S.artIndex],stage=$('#ustage');
+  if(!choice){stage.textContent='';return;}
+  const {entry:e,set}=choice;
+  S.pinned=new Set(choices.map(x=>x.entry.key));
+
+  const url=await blobURL(e); stage.textContent='';
+  const img=new Image(); img.src=url; await img.decode().catch(()=>{});
+  const W=stage.clientWidth,H=stage.clientHeight,nw=img.naturalWidth||1,nh=img.naturalHeight||1;
+  const groupChoices=choices.filter(c=>c.pose===choice.pose);
+  const groupIndex=groupChoices.indexOf(choice);
+  const measured=await Promise.all(groupChoices.map(c=>imageMetrics(c.entry)));
+  const dims=groupChoices.map((c,i)=>{
+    const p=c.entry.position||{},canvas=p.canvas||p.canvas_authored||p.untrimmed_size;
+    return {choice:c,p,metric:measured[i],
+      w:+canvas?.[0]||measured[i].w,h:+canvas?.[1]||measured[i].h};
+  });
+  const current=dims[groupIndex];
+  current.w=current.w||nw; current.h=current.h||nh;
+  const maxW=Math.max(current.w,...dims.map(d=>d.w||0));
+  const maxH=Math.max(current.h,...dims.map(d=>d.h||0));
+  const imageOffset=current.p.canvas_offset||current.p.trim_offset||[0,0];
+  const imageCenter={
+    x:(maxW-current.w)/2+(+imageOffset[0]||0)+nw/2,
+    y:maxH-current.h+(+imageOffset[1]||0)+nh/2,
+  };
+
+  // positions.json supplies the authored canvas and offsets. Every image is
+  // placed in one bottom-centred coordinate system, so switching poses cannot
+  // make the character jump around.
+  let frame={x:0,y:0,w:maxW,h:maxH};
+  if(S.fit==='subject'){
+    const boxes=[];
+    for(const d of dims){
+      if(!d.w||!d.h) continue;
+      const p=d.p,off=p.canvas_offset||p.trim_offset||[0,0];
+      const b=p.content_bbox||d.metric.bbox||[0,0,d.w,d.h];
+      boxes.push({
+        x:(maxW-d.w)/2+(+off[0]||0)+b[0],
+        y:maxH-d.h+(+off[1]||0)+b[1],
+        x1:(maxW-d.w)/2+(+off[0]||0)+b[2],
+        y1:maxH-d.h+(+off[1]||0)+b[3],
+      });
+    }
+    if(boxes.length){
+      const x=Math.min(...boxes.map(b=>b.x)),y=Math.min(...boxes.map(b=>b.y));
+      const x1=Math.max(...boxes.map(b=>b.x1)),y1=Math.max(...boxes.map(b=>b.y1));
+      frame={x,y,w:Math.max(1,x1-x),h:Math.max(1,y1-y)};
+    }
+  }
+  const sc=Math.min(W/frame.w,H/frame.h)*.96;
+  const frameCenter={x:frame.x+frame.w/2,y:frame.y+frame.h/2};
+  img.style.width=nw+'px'; img.style.height=nh+'px';
+  img.style.left=`calc(50% + ${(imageCenter.x-frameCenter.x)*sc}px)`;
+  img.style.top=`calc(50% + ${(imageCenter.y-frameCenter.y)*sc}px)`;
+  img.style.transform=`translate(-50%,-50%) scale(${sc})`;
+  img.onclick=openLightbox;
+  stage.appendChild(img); requestAnimationFrame(()=>img.classList.add('on'));
+}
+function disposeUnitSpine(){
+  if(S.unitSpine){S.unitSpine.dispose();S.unitSpine=null;}
+}
+async function setUnitView(mode){
+  const u=S.units.get(S.sel);
+  if((mode==='chibi'&&!u?.spine)||(mode==='art'&&!u?.artSpine)) return;
+  S.unitMode=mode;
+  $$('#viewseg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===mode)));
+  $('#uspinecontrols').hidden=mode==='image';
+  if(mode==='image'){disposeUnitSpine();await showArt();}
+  else await showUnitSpine();
+}
+/* Wheel to zoom, drag to pan, double-click to reset. The camera lives in the
+   player (see zoomAt/panBy in taimanin_spine.js); this only translates pointer
+   events into world-space requests. `getPlayer` is a callback because the player
+   is replaced whenever a different model or animation is loaded. */
+function attachSpineZoom(canvas,getPlayer){
+  canvas.style.touchAction='none';
+  canvas.title='Scroll to zoom · drag to pan · double-click to reset';
+  canvas.addEventListener('wheel',e=>{
+    const p=getPlayer(); if(!p||p.model?.stage) return;   // scene stage is fixed
+    e.preventDefault();
+    const r=canvas.getBoundingClientRect();
+    p.zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);
+    canvas.style.cursor=p.zoom>1?'grab':'';
+  },{passive:false});
+  let drag=null;
+  canvas.addEventListener('pointerdown',e=>{
+    const p=getPlayer(); if(!p||p.model?.stage||p.zoom<=1) return;
+    drag={x:e.clientX,y:e.clientY}; canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor='grabbing';
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!drag) return;
+    const p=getPlayer(); if(!p) return;
+    p.panBy(e.clientX-drag.x,e.clientY-drag.y);
+    drag={x:e.clientX,y:e.clientY};
+  });
+  const end=e=>{ if(!drag) return; drag=null;
+    try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
+    const p=getPlayer(); canvas.style.cursor=p&&p.zoom>1?'grab':''; };
+  canvas.addEventListener('pointerup',end);
+  canvas.addEventListener('pointercancel',end);
+  canvas.addEventListener('dblclick',()=>{
+    const p=getPlayer(); if(!p||p.model?.stage) return;
+    p.resetView(); canvas.style.cursor='';
+  });
+}
+
+async function showUnitSpine(){
+  const u=S.units.get(S.sel);
+  const model=S.unitMode==='art'?u?.artSpine:S.unitMode==='chibi'?u?.spine:null;
+  if(!model) return;
+  disposeUnitSpine();
+  const stage=$('#ustage'); stage.textContent='';
+  const canvas=document.createElement('canvas');
+  canvas.setAttribute('aria-label',`${model.name} Spine animation`);
+  attachSpineZoom(canvas,()=>S.unitSpine);
+  stage.appendChild(canvas);
+  const selectedKey=u.key;
+  let player=null;
+  try{
+    player=new TaimaninSpinePlayer(canvas); S.unitSpine=player;
+    const animations=await player.load(model);
+    if(S.sel!==selectedKey||S.unitMode==='image'||S.unitSpine!==player){player.dispose();return;}
+    const select=$('#uspineanim'); select.textContent='';
+    for(const name of animations){
+      const option=document.createElement('option');
+      option.value=option.textContent=name; select.appendChild(option);
+    }
+    const current=player.state?.tracks?.[0]?.animation?.name;
+    if(current) select.value=current;
+    $('#uspineplay').textContent='Pause';
+    $('#uspineplay').setAttribute('aria-pressed','true');
+  }catch(err){
+    console.error('unit spine',model,err);
+    if(S.unitSpine===player){
+      disposeUnitSpine();
+      stage.innerHTML='<div class="none">This Spine model could not be rendered.</div>';
+      toast(`Spine failed: ${model.name}`,5000);
+    }
+  }
+}
+async function renderLightbox(){
+  const u=S.units.get(S.sel),choice=u?artChoices(u)[S.artIndex]:null;
+  if(!choice) return closeLightbox();
+  const box=$('#lightbox'),img=box.querySelector('img');
+  img.src=await blobURL(choice.entry);
+  box.querySelector('.caption').textContent=
+    `${localText(u.meta?.display_name||u.meta?.name)||u.id} · image ${choice.pose}`+
+    (choice.variant==='base'?'':` · ${choice.variant.toUpperCase()}`);
+}
+async function openLightbox(){
+  if(!artChoices(S.units.get(S.sel)).length) return;
+  const box=$('#lightbox'); box.classList.add('on'); box.setAttribute('aria-hidden','false');
+  await renderLightbox();
+}
+function closeLightbox(){
+  const box=$('#lightbox'); box.classList.remove('on'); box.setAttribute('aria-hidden','true');
+  const holder=$('#lightbox .lbcomp');
+  holder.hidden=true; holder.textContent='';        // release the blob-backed imgs
+  $('#lightbox img').hidden=false;
+}
+function voiceKey(v){
+  return `${String(v.type||'').toLowerCase()}|${String(v.variant||'base').toLowerCase()}|${+(v.index??v.idx??1)}`;
+}
+function joinVoiceMetadata(u){
+  const meta=u.meta?.voices||[];
+  const byFile=new Map(),bySlot=new Map();
+  for(const m of meta){
+    if(m.filename) byFile.set(String(m.filename).toLowerCase(),m);
+    bySlot.set(voiceKey(m),m);
+  }
+  const seen=new Set();
+  for(const v of u.voices){
+    v.metaVoice=byFile.get(String(v.name||'').toLowerCase())||bySlot.get(voiceKey(v))||null;
+    if(v.metaVoice) seen.add(v.metaVoice);
+  }
+  for(const m of meta){
+    if(seen.has(m)||!localText(m.text)) continue;
+    u.voices.push({entry:null,form:u.form,type:m.type,variant:m.variant||'base',
+      idx:+m.index||1,name:m.filename||'',metaVoice:m});
+  }
+}
+function renderUnitInfo(u){
+  const box=$('#uinfo'); box.textContent='';
+  const m=u.meta;
+  if(!m){
+    box.innerHTML='<div class="none">Run taimanin_tables.py to add names, profiles, skills and transcripts.</div>';
+    renderSceneLinks(u,box);
+    return;
+  }
+  const credits=document.createElement('div'); credits.className='ucredits';
+  const rarity={1:'N',2:'R',3:'HR',4:'SR',5:'UR'}[m.rarity]||m.rarity;
+  const element={1:'Superhuman',2:'Demon',3:'Spirit',4:'Nature',5:'Science'}[m.element]||m.element;
+  for(const [label,value] of [['Unit',m.unit_id],['Rarity',rarity],['Element',element],
+      ['Illustrator',localText(m.illustrator)],['Voice',localText(m.voice_actor)]]){
+    if(value==null||value==='') continue;
+    const s=document.createElement('span'),b=document.createElement('b');
+    b.textContent=label+': '; s.append(b,document.createTextNode(value)); credits.appendChild(s);
+  }
+  box.appendChild(credits);
+  const profile=localText(m.profile);
+  if(profile){
+    const p=document.createElement('p'); p.className='uprofile'; p.textContent=profile; box.appendChild(p);
+  }
+  const skills=document.createElement('div'); skills.className='uskills';
+  const rows=[];
+  if(m.leader_skill) rows.push(['Leader',localText(m.leader_skill.name),localText(m.leader_skill.detail)]);
+  for(const s of m.skills||[]){
+    const lev=(s.levels||[]).at(-1);
+    rows.push(['Skill',localText(s.name),localText(lev?.detail)]);
+  }
+  for(const [kind,name,detail] of rows){
+    const d=document.createElement('div'); d.className='uskill';
+    const b=document.createElement('b'); b.textContent=`${kind}: ${name||'—'}`;
+    d.appendChild(b);
+    if(detail) d.append(document.createElement('br'),document.createTextNode(detail));
+    skills.appendChild(d);
+  }
+  if(rows.length) box.appendChild(skills);
+  renderVariationLinks(u,box);
+  renderSceneLinks(u,box);
+}
+/* Show the unit's card art on hover. The variation list is just names, and the
+   names of a character's cards differ only by costume title, so the thumbnail is
+   what actually identifies them. Loaded on first hover, not up front — a busy
+   character has a dozen variations and none may ever be pointed at. */
+function attachCardPreview(el,unit){
+  if(!unit) return;
+  const entry=unit.thumb||unit.thumbR18;
+  if(!entry) return;
+  let tip=null,token=0;
+  const show=async()=>{
+    const mine=++token;
+    if(!tip){
+      tip=document.createElement('div'); tip.className='cardtip';
+      const img=new Image(); tip.appendChild(img);
+      document.body.appendChild(tip);
+      try{ img.src=await blobURL(entry); }catch(_){ tip.remove(); tip=null; return; }
+    }
+    if(mine!==token) return;
+    const r=el.getBoundingClientRect();
+    tip.style.left=Math.max(8,Math.min(innerWidth-168,r.left))+'px';
+    // Prefer above; flip below when there is no room.
+    tip.style.top=(r.top>190?r.top-182:r.bottom+8)+'px';
+    tip.classList.add('on');
+  };
+  const hide=()=>{ token++; if(tip) tip.classList.remove('on'); };
+  el.addEventListener('pointerenter',show);
+  el.addEventListener('pointerleave',hide);
+  el.addEventListener('click',hide);
+  el.addEventListener('blur',hide);
+}
+
+function renderVariationLinks(u,box){
+  const ids=S.unitCharacters.get(u.key)||[];
+  const currentRoot=unitKeyFromId(u.meta?.root_unit_id||u.meta?.unit_id);
+  const groups=[];
+  for(const id of ids){
+    const keys=[...(S.characterFamilies.get(id)||[])].filter(k=>S.units.has(k))
+      .sort((a,b)=>{
+        const am=S.units.get(a)?.meta?.unit_id||a,bm=S.units.get(b)?.meta?.unit_id||b;
+        return am.localeCompare(bm,undefined,{numeric:true});
+      });
+    if(keys.length>1) groups.push({id,keys});
+  }
+  if(!groups.length) return;
+  const wrap=document.createElement('div'); wrap.className='uvariations';
+  for(const {id,keys} of groups){
+    const row=document.createElement('div'); row.className='uvar-group';
+    const label=document.createElement('span'); label.className='lbl';
+    label.textContent=`${S.characterLabels.get(id)||'Character'} variations`;
+    row.appendChild(label);
+    for(const key of keys){
+      const v=S.units.get(key),name=localText(v?.meta?.display_name||v?.meta?.name)||`Unit ${v?.id||key}`;
+      const b=document.createElement('button'); b.className='uvar'; b.textContent=name;
+      b.title=v?.meta?.unit_id||key;
+      b.setAttribute('aria-current',String(key===currentRoot));
+      attachCardPreview(b,v);
+      b.onclick=()=>{
+        openUnit(key);
+        $(`#list [data-k="${CSS.escape(key)}"]`)?.scrollIntoView({block:'nearest'});
+      };
+      row.appendChild(b);
+    }
+    wrap.appendChild(row);
+  }
+  box.appendChild(wrap);
+}
+function renderSceneLinks(u,box){
+  const sceneNumber=sceneIdFromUnit(u);
+  if(!sceneNumber) return;
+  const scenes=[...S.scenes.values()].filter(s=>{
+    const m=String(s.id).match(/^(?:chr_)?(\d+)(?:_\d+)?$/i);
+    return m&&String(+m[1])===sceneNumber;
+  }).sort((a,b)=>a.id.localeCompare(b.id,undefined,{numeric:true}));
+  if(!scenes.length) return;
+  const row=document.createElement('div'); row.className='uscenes';
+  const label=document.createElement('span'); label.className='lbl'; label.textContent='Scenes';
+  row.appendChild(label);
+  for(const scene of scenes){
+    const b=document.createElement('button'); b.className='uscene'; b.textContent=scene.id;
+    b.onclick=()=>setTab('scenes',scene.key); row.appendChild(b);
+  }
+  box.appendChild(row);
+}
+function renderVoices(u){
+  const box=$('#voices'); box.textContent='';
+  if(!u.voices.length){box.innerHTML='<div class="none">No voice clips found for this unit.</div>';return;}
+  const g=new Map();
+  for(const v of u.voices){ if(!g.has(v.type)) g.set(v.type,[]); g.get(v.type).push(v); }
+  const keys=[...g.keys()].sort((a,b)=>{const i=VOICE_ORDER.indexOf(a),j=VOICE_ORDER.indexOf(b);
+    return (i<0?99:i)-(j<0?99:j)||a.localeCompare(b);});
+  for(const k of keys){
+    const list=g.get(k).sort((a,b)=>a.variant.localeCompare(b.variant)||a.idx-b.idx);
+    const d=document.createElement('div'); d.className='vgroup';
+    d.innerHTML=`<h4>${VOICE_LABEL[k]||k} <span style="color:var(--fg-3);font-weight:400">${k}</span></h4>`;
+    const l=document.createElement('div'); l.className='vlist';
+    for(const v of list){
+      const item=document.createElement('div'); item.className='vitem';
+      const b=document.createElement('button'); b.className='vbtn';
+      b.innerHTML=`<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                   <span class="n">${v.idx}${v.variant!=='base'?' · '+v.variant:''}</span>`;
+      if(v.entry) b.onclick=()=>playClip(v.entry,b); else b.disabled=true;
+      item.appendChild(b);
+      const text=localText(v.metaVoice?.text);
+      if(text){
+        const t=document.createElement('div'); t.className='vtext'; t.textContent=text; item.appendChild(t);
+      }
+      l.appendChild(item);
+    }
+    d.appendChild(l); box.appendChild(d);
+  }
+}
+async function playClip(entry,btn){
+  $$('.vbtn.playing').forEach(b=>b.classList.remove('playing'));
+  if(S.audio){S.audio.pause();S.audio=null;}
+  try{
+    const a=new Audio(await blobURL(entry)); S.audio=a; a.muted=S.muted;
+    btn?.classList.add('playing');
+    a.onended=()=>btn?.classList.remove('playing');
+    await a.play();
+  }catch(_){ btn?.classList.remove('playing'); toast('Could not play that clip'); }
+}
+
+/* =====================================================================
+   SCENES — ADV script player
+   ===================================================================== */
+function parseScript(text){
+  const ops=[];
+  for(const raw of text.split(/\r?\n/)){
+    const line=raw.replace(/^\uFEFF/,'').replace(/\s+$/,'');
+    if(!line.trim()||line.startsWith('//')) continue;
+    // GROUP is a container in the source format. Its XML-style closing tag
+    // is control syntax, never dialogue.
+    if(/^<\/[A-Z_0-9]+>\s*$/i.test(line)) continue;
+    const m=line.match(/^<([A-Z_0-9]+)>(.*)$/i);
+    if(m) ops.push({t:m[1].toUpperCase(),a:m[2].split(',').map(s=>s.trim())});
+    else ops.push({t:'TEXT',a:[line]});
+  }
+  return ops;
+}
+function sceneSpineAnimations(ops){
+  return [...new Set(ops.filter(o=>o.t==='SPINE_ANIMATOR')
+    .map(o=>o.a[0]).filter(Boolean))];
+}
+function indexCGStops(A){
+  let ev=null,spine='',animation='',pause=-1;
+  const seen=new Set();
+  A.cgStops=[];
+  for(const o of A.ops){
+    const a=o.a;
+    if(o.t==='EV') ev=`ev:${String(a[0]||'').toLowerCase()}`;
+    else if(o.t==='EV_OUT') ev=null;
+    else if(o.t==='SPINE'){
+      if(String(a[1]||'IN').toUpperCase()==='OUT'){spine='';animation='';}
+      else {spine=String(a[0]||'').toLowerCase();animation='';}
+    }else if(o.t==='SPINE_ANIMATOR'&&spine) animation=String(a[0]||'').toLowerCase();
+    else if(o.t==='BG_OUT') ev=null;
+    if(o.t==='PAUSE'){
+      pause++;
+      const visual=S.sceneSpineEnabled&&spine
+        ?`spine:${spine}${animation?`:${animation}`:''}`:ev;
+      if(visual&&!seen.has(visual)){
+        A.cgStops.push({pause,key:visual});
+        seen.add(visual);
+      }
+    }
+  }
+}
+function refreshSceneVisualKey(A){
+  if(!A) return;
+  A.visualKey=S.sceneSpineEnabled&&A.spineRef
+    ?`spine:${A.spineRef}${A.spineAnimation?`:${A.spineAnimation}`:''}`
+    :A.evKey;
+}
+
+async function openScene(k){
+  closeLightbox();
+  disposeUnitSpine();
+  S.sel=k;
+  // Story and unit scenes share this viewer; keep whichever tab is showing so
+  // opening a story scene does not bounce the browser back to unit scenes.
+  if(S.tab==='units') S.tab=(S.scenes.get(k)?.kind==='story')?'story':'scenes';
+  $$('#list [data-k]').forEach(c=>c.setAttribute('aria-selected',String(c.dataset.k===k)));
+  const s=S.scenes.get(k);
+  $('#paneS').classList.add('on'); $('#paneU').classList.remove('on'); $('#empty').style.display='none';
+  $('#app').classList.remove('browse');
+  $('#adv').classList.toggle('cgmode',S.cgMode);
+  $('#cgmode').setAttribute('aria-pressed',String(S.cgMode));
+  stopAll();
+
+  $('#stitle').textContent=s.label;
+  $('#ssub').textContent=s.path;
+  $('#sspinecontrols').hidden=true;
+  $('#spinetoggle').hidden=!s.hasSpine;
+  $('#spinetoggle').setAttribute('aria-pressed',String(S.sceneSpineEnabled));
+  $('#spinetoggle').textContent=`Spine: ${S.sceneSpineEnabled?'On':'Off'}`;
+  for(const id of ['rew','play','seek']) $('#'+id).disabled=!!s.spineModel;
+
+  if(s.spineModel){
+    S.adv={s,ops:[],pair:new Map(),locals:[],i:0,stops:[],log:[],
+      cgStops:[],spineAnimations:[],visualKey:null,evKey:null,
+      spineRef:'',spineAnimation:'',
+      name:'',text:'',auto:false,timer:null};
+    $('#seek').max=0; $('#seek').value=0; $('#pos').textContent='Spine';
+    resetStage(); $('#log').classList.remove('on');
+    await loadSceneSpineModel(s.spineModel);
+    return;
+  }
+
+  let text,ops;
+  try{
+    text=await (await s.script.get()).text();
+    ops=parseScript(text);
+    if(!ops.length) throw new Error('the script contains no readable operations');
+  }catch(err){
+    console.error('scene script',s.path,err);
+    resetStage();
+    $('#ttext').textContent='The scene script could not be loaded.';
+    $('#ttext').lang='en';
+    toast(`Scene failed to load: ${s.id}`,5000);
+    return;
+  }
+
+  // parent/child layering: a child image is a partial overlay on its parent
+  const pair=new Map();
+  if(s.img){
+    try{
+      const j=JSON.parse(await (await s.img.get()).text());
+      for(const p of (j.pairList||[])) pair.set(String(p.child).toLowerCase(),String(p.parent));
+    }catch(_){}
+  }
+  const locals=[s.imagesPath,s.voicesPath];
+  S.adv={s,ops,pair,locals,i:0,stops:[],cgStops:[],log:[],
+    spineAnimations:sceneSpineAnimations(ops),visualKey:null,evKey:null,
+    spineRef:'',spineAnimation:'',
+    name:'',text:'',auto:false,timer:null};
+
+  // index every PAUSE so the seek bar maps to readable positions
+  ops.forEach((o,i)=>{ if(o.t==='PAUSE') S.adv.stops.push(i); });
+  indexCGStops(S.adv);
+  $('#seek').max=Math.max(0,(S.cgMode?S.adv.cgStops:S.adv.stops).length-1);
+  $('#seek').value=0;
+
+  resetStage(); $('#log').classList.remove('on');
+  if(S.cgMode&&S.adv.cgStops.length) await seekTo(S.adv.cgStops[0].pause);
+  else await run();
+}
+function resetStage(){
+  $('#lBG').textContent=''; $('#lEV').textContent=''; $('#lAC').textContent='';
+  disposeSceneSpine(); $('#lSP').textContent='';
+  $('#sspinecontrols').hidden=true;
+  if(S.adv){
+    S.adv.visualKey=null;S.adv.evKey=null;S.adv.evBaseEntry=null;
+    S.adv.spineRef='';S.adv.spineAnimation='';
+  }
+  $('#tname').textContent=''; $('#ttext').textContent='';
+  $('#tbox').classList.remove('off');
+}
+function clearSceneVisuals(){
+  $('#lBG').textContent=''; $('#lEV').textContent=''; $('#lAC').textContent='';
+  disposeSceneSpine(); $('#lSP').textContent='';
+  $('#sspinecontrols').hidden=true;
+  if(S.adv){
+    S.adv.visualKey=null;S.adv.evKey=null;S.adv.evBaseEntry=null;
+    S.adv.spineRef='';S.adv.spineAnimation='';
+  }
+}
+function disposeSceneSpine(){
+  if(S.sceneSpine){S.sceneSpine.dispose();S.sceneSpine=null;}
+}
+function spineVariantFor(model,animation){
+  const suffix=String(animation||'').match(/_(\d{2})$/)?.[1];
+  return (suffix&&model?.variants?.find(v=>v.variant===suffix))||model;
+}
+async function loadSceneSpineModel(model,requestedAnimation){
+  disposeSceneSpine();
+  const layer=$('#lSP'); layer.textContent='';
+  const canvas=document.createElement('canvas'); layer.appendChild(canvas);
+  let player=null;
+  try{
+    const selected=spineVariantFor(model,requestedAnimation);
+    const loadModel={...selected,variants:model.variants||selected.variants||[],stage:true};
+    // RPGX event Spine is rendered onto an opaque black 1280x720 surface in
+    // the game. Keeping this canvas opaque prevents browser compositing from
+    // darkening semi-transparent edges where attachments overlap.
+    player=new TaimaninSpinePlayer(canvas,{opaque:true}); S.sceneSpine=player;
+    const animations=await player.load(loadModel,requestedAnimation);
+    if(S.sceneSpine!==player){player.dispose();return [];}
+    const select=$('#sspineanim'); select.textContent='';
+    const choices=[...new Set([...(S.adv?.spineAnimations||[]),...animations])];
+    for(const name of choices){
+      const option=document.createElement('option');
+      option.value=option.textContent=name; select.appendChild(option);
+    }
+    const current=requestedAnimation||player.state?.tracks?.[0]?.animation?.name;
+    if(current) select.value=current;
+    $('#sspinecontrols').hidden=!choices.length;
+    $('#sspineplay').textContent='Pause';
+    $('#sspineplay').setAttribute('aria-pressed','true');
+    return choices;
+  }catch(err){
+    console.error('scene spine',model.name,err);
+    if(S.sceneSpine===player){
+      disposeSceneSpine(); layer.textContent='';
+      toast(`Scene Spine failed: ${model.name}`,5000);
+    }
+    return [];
+  }
+}
+async function setSceneSpine(name,direction){
+  if(String(direction||'IN').toUpperCase()==='OUT'){
+    disposeSceneSpine(); $('#lSP').textContent=''; $('#sspinecontrols').hidden=true; return true;
+  }
+  if(!S.sceneSpineEnabled) return false;
+  const model=findSpineModel(name);
+  if(!model){console.warn('scene Spine model not found',name);return false;}
+  await loadSceneSpineModel(model);
+  return !!S.sceneSpine;
+}
+async function setSceneSpineAnimation(name){
+  if(!name||!S.sceneSpineEnabled) return false;
+  if(S.sceneSpine?.setAnimation(name)){
+    $('#sspineanim').value=name;
+    return true;
+  }
+  const model=S.sceneSpine?.model;
+  if(!model) return false;
+  await loadSceneSpineModel(model,name);
+  const ok=!!S.sceneSpine;
+  if(ok) $('#sspineanim').value=name;
+  return ok;
+}
+/* An ADV actor name is usually a Unity PREFAB, not an image: `mmt_t001a_r18`
+   composes mmt_t001b1/a1/a2/b2 at fixed offsets and has no file of its own,
+   while `mmt_t001c_r18` is a prefab AND the name of one 274x218 cut inside it.
+   Drawing the single same-named file is what produced a lone body part; drawing
+   nothing is what made actors vanish. taimanin_actors.py recovers the
+   composition from the bundles into extracted/adv/actor_parts.json.
+
+   Offsets are Unity local pixels from the centre of a 1280x760 canvas, Y UP, and
+   every piece pivots on its own centre — so a piece sits at
+   (640+x, 380-y) and is centred there with translate(-50%,-50%). Sizes are set
+   as a percentage of the canvas once the image reports naturalWidth, which keeps
+   the whole composite resolution-independent as the stage resizes. */
+/* actor_sources.json stores the final flat image list. The viewer draws that
+   list literally; prefab expansion and source selection never happen here. */
+async function buildActor(name,locals){
+  const key=String(name||'').toLowerCase();
+  /* Source selection is already settled in actor_sources.json. */
+  const source=S.actorSources.get(key);
+  if(!source||source.kind==='missing') return null;
+  if(source.kind==='authored'){
+    const authored=source.file
+      ?S.actorAuthored.get(stem(source.file.split('/').pop()))
+      :S.actorAuthored.get(key);
+    if(!authored) return null;
+    const box=document.createElement('div'); box.className='composite';
+    const img=new Image(); img.src=await blobURL(authored);
+    img.style.left='50%'; img.style.top='50%'; img.style.width='100%';
+    box.appendChild(img);
+    return box;
+  }
+  const parts=Array.isArray(source.parts)?source.parts:null;
+  if(!parts||!parts.length) return null;
+  const [CW,CH]=S.actorCanvas;
+  const box=document.createElement('div'); box.className='composite';
+  /* The catalog is already flattened. Runtime composition is deliberately a
+     literal draw of this list, with no ownership or fallback inference. */
+  for(const p of parts){
+    const e=p.file?S.actorRaw.get(String(p.file).toLowerCase()):null;
+    if(!e) return null;                    // catalog integrity failure
+    const url=await blobURL(e);
+    const left=(((CW/2)+p.x)/CW*100)+'%', top=(((CH/2)-p.y)/CH*100)+'%';
+    const img=new Image();
+    img.src=url;
+    img.style.left=left; img.style.top=top;
+    img.style.width=(p.w/CW*100)+'%';
+    img.style.height=(p.h/CH*100)+'%';
+    box.appendChild(img);
+  }
+  return box.childElementCount?box:null;
+}
+
+async function setLayer(el,names,locals){
+  el.textContent='';
+  for(const n of names){
+    const e=await resolve(n,locals); if(!e) continue;
+    const img=new Image(); img.src=await blobURL(e); el.appendChild(img);
+  }
+}
+function spriteParts(name){
+  const want=stem(name),out=[];
+  const exact=S.pool.get(want);
+  if(exact) out.push(exact);
+  if(!exact){
+    for(const [key,e] of S.pool){
+      const tail=key.slice(want.length);
+      if(key.startsWith(want)&&/^[a-z](?:~\d+)?$/i.test(tail)) out.push(e);
+    }
+  }
+  return out.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+}
+function evEntrySize(entry){
+  const p=entry?.position||{};
+  const size=p.size||p.source_size||p.canvas;
+  return {w:+size?.[0]||0,h:+size?.[1]||0};
+}
+function isEVFrame(entry){
+  const {w,h}=evEntrySize(entry);
+  // Event artwork is authored on a 960x720 stage. Keep this deliberately a
+  // little permissive for older packs with a differently sized full frame,
+  // while excluding expression/body patches such as 152x152 or 520x300.
+  return w>=720&&h>=540;
+}
+function sameEVAtlas(a,b){
+  const aa=a?.position?.atlas,bb=b?.position?.atlas;
+  return !!aa&&!!bb&&String(aa).toLowerCase()===String(bb).toLowerCase();
+}
+function inferEVBase(parts,previous){
+  const ownFrame=parts.find(isEVFrame);
+  if(ownFrame) return ownFrame;
+  const sample=parts[0];
+  if(!sample) return null;
+  if(previous&&isEVFrame(previous)&&sameEVAtlas(sample,previous)) return previous;
+  const atlas=sample.position?.atlas;
+  if(!atlas) return null;
+  return [...S.pool.values()]
+    .filter(e=>isEVFrame(e)&&String(e.position?.atlas||'').toLowerCase()===String(atlas).toLowerCase())
+    .sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))[0]||null;
+}
+async function loadImageEntry(entry){
+  const img=new Image(); img.src=await blobURL(entry);
+  await img.decode().catch(()=>{});
+  return img;
+}
+function imagePixels(img){
+  const c=document.createElement('canvas'); c.width=img.naturalWidth||1;c.height=img.naturalHeight||1;
+  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(img,0,0);
+  return {w:c.width,h:c.height,data:x.getImageData(0,0,c.width,c.height).data};
+}
+function patchOffset(base,patch,entry){
+  const cacheKey=`${base.w}x${base.h}|${entry.key}`;
+  if(S.sceneOffsets.has(cacheKey)) return S.sceneOffsets.get(cacheKey);
+  const maxX=Math.max(0,base.w-patch.w),maxY=Math.max(0,base.h-patch.h);
+  if(!maxX&&!maxY) return {x:0,y:0};
+  const samples=[],stride=Math.max(8,Math.floor(Math.min(patch.w,patch.h)/12));
+  for(let y=4;y<patch.h-4;y+=stride) for(let x=4;x<patch.w-4;x+=stride){
+    const i=(y*patch.w+x)*4;
+    if(patch.data[i+3]>220) samples.push([x,y,i]);
+  }
+  const score=(ox,oy,limit=Infinity)=>{
+    let sum=0;
+    for(const [x,y,pi] of samples){
+      const bi=((oy+y)*base.w+ox+x)*4;
+      sum+=Math.abs(patch.data[pi]-base.data[bi])
+        +Math.abs(patch.data[pi+1]-base.data[bi+1])
+        +Math.abs(patch.data[pi+2]-base.data[bi+2]);
+      if(sum>=limit) break;
+    }
+    return sum;
+  };
+  let best={x:0,y:0,s:Infinity};
+  // Position metadata provides the natural dimensions and a useful authored
+  // coordinate candidate. Pixel matching then corrects atlas-packed sprites
+  // into the 960x720 scene coordinate system.
+  const p=entry.position||{},r=p.logical_rect||[0,0];
+  const seeds=[[Math.max(0,Math.min(maxX,Math.round(+r[0]||0))),
+    Math.max(0,Math.min(maxY,Math.round(+r[1]||0)))]];
+  for(let y=0;y<=maxY;y+=6) for(let x=0;x<=maxX;x+=6){
+    const s=score(x,y,best.s); if(s<best.s) best={x,y,s};
+  }
+  for(const [x,y] of seeds){const s=score(x,y,best.s);if(s<best.s)best={x,y,s};}
+  const coarse=best;
+  for(let y=Math.max(0,coarse.y-7);y<=Math.min(maxY,coarse.y+7);y++)
+    for(let x=Math.max(0,coarse.x-7);x<=Math.min(maxX,coarse.x+7);x++){
+      const s=score(x,y,best.s); if(s<best.s) best={x,y,s};
+    }
+  const value={x:best.x,y:best.y};S.sceneOffsets.set(cacheKey,value);return value;
+}
+async function setEVLayer(name,parentName,previousBase){
+  const layer=$('#lEV'); layer.textContent='';
+  const requested=spriteParts(name);
+  const explicitBase=parentName&&((await resolve(parentName,[]))||spriteParts(parentName)[0]);
+  const baseEntry=explicitBase||inferEVBase(requested,previousBase)
+    ||(await resolve(name,[]))||requested[0];
+  if(!baseEntry) return null;
+  const baseImg=await loadImageEntry(baseEntry),base=imagePixels(baseImg);
+  // Pair-list scenes supply an explicit parent. Newer direct scripts omit it:
+  // when their requested asset is smaller than a scene frame it is a packed
+  // patch and must be composited over the prior/inferred full-frame CG.
+  const patches=(parentName||!requested.some(isEVFrame))?requested:[];
+  const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=720;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);
+  // EV art is stored on a 960x720 authored canvas but the scene player and
+  // Spine use the full 1280x720 viewport. Map both axes to that same stage so
+  // switching between static and animated CGs does not change visual size.
+  const scaleX=canvas.width/base.w,scaleY=canvas.height/base.h;
+  ctx.drawImage(baseImg,0,0,canvas.width,canvas.height);
+  for(const entry of patches){
+    if(entry.key===baseEntry.key) continue;
+    const img=await loadImageEntry(entry),patch=imagePixels(img);
+    if(patch.w===base.w&&patch.h===base.h){
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      continue;
+    }
+    const off=patchOffset(base,patch,entry);
+    ctx.drawImage(img,off.x*scaleX,off.y*scaleY,patch.w*scaleX,patch.h*scaleY);
+  }
+  layer.appendChild(canvas);
+  return baseEntry;
+}
+function flash(ms){const f=$('#flash');f.style.transition='none';f.style.opacity='.95';
+  requestAnimationFrame(()=>{f.style.transition=`opacity ${Math.max(120,+ms||600)}ms`;f.style.opacity='0';});}
+function quake(){const a=$('#adv');a.classList.remove('quake');void a.offsetWidth;a.classList.add('quake');}
+
+async function playBGM(name){
+  const e=await resolve(name,[]); if(!e) return;
+  if(S.bgm){S.bgm.pause();S.bgm=null;}
+  const a=new Audio(await blobURL(e)); a.loop=true; a.volume=.45; a.muted=S.muted;
+  S.bgm=a; a.play().catch(()=>{});
+}
+async function playVoice(name,locals){
+  const e=await resolve(name,locals); if(!e) return;
+  if(S.voice){S.voice.pause();S.voice=null;}
+  const a=new Audio(await blobURL(e)); a.muted=S.muted; S.voice=a; a.play().catch(()=>{});
+}
+function stopAll(){
+  for(const k of ['audio','bgm','voice']) if(S[k]){S[k].pause();S[k]=null;}
+  if(S.adv&&S.adv.timer){clearTimeout(S.adv.timer);S.adv.timer=null;}
+}
+
+/* Execute ops until the next PAUSE.
+   Guarded against re-entry: the body awaits on file reads, so a fast click or an
+   auto-play tick landing mid-await would interleave two runs and duplicate
+   layers (two <img> in #lBG) as well as skip state. */
+let running=false;
+async function run(){
+  const A=S.adv; if(!A||running) return;
+  running=true;
+  try{ await runInner(A); } finally{ running=false; }
+}
+async function runInner(A){
+  let guard=0;
+  while(A.i<A.ops.length){
+    if(++guard>4000) break;
+    const o=A.ops[A.i++], a=o.a;
+    switch(o.t){
+      case 'TEXT': A.text+=(A.text?'\n':'')+a.join(','); break;
+      case 'NAME_PLATE': A.name=a.join(',').trim(); break;
+      case 'TXT_CLEAR': A.text=''; A.name=''; break;
+      case 'BG': await setLayer($('#lBG'),[a[0]],A.locals); break;
+      case 'BG_OUT':
+        $('#lBG').textContent=''; $('#lEV').textContent='';
+        A.evKey=null; A.evBaseEntry=null; refreshSceneVisualKey(A);
+        break;
+      case 'EV': {
+        const n=a[0]||''; const p=A.pair.get(n.toLowerCase());
+        A.evBaseEntry=await setEVLayer(n,p,A.evBaseEntry);
+        A.evKey=`ev:${n.toLowerCase()}`; refreshSceneVisualKey(A);
+        break; }
+      case 'EV_OUT':
+        $('#lEV').textContent='';
+        A.evKey=null; A.evBaseEntry=null; refreshSceneVisualKey(A);
+        break;
+      /* <ACTOR> idx, name, posFrom, posTo, direction, timing, duration
+         The position that matters is posTo (a[3]) — posFrom is where the move
+         starts — and `direction` is OUT as often as IN. Treating every ACTOR as
+         "show" and reading a[2] as the position left a dismissed actor on stage:
+         in adv/c001_s01b__all the CENTER character is taken OUT at line 56, then
+         re-enters on the RIGHT while a second character enters LEFT, so she was
+         visible twice at once. */
+      case 'ACTOR': {
+        const slot=a[0]||'0', nm=a[1]||'';
+        const x=(a[3]||a[2]||'CENTER').toUpperCase();
+        const dir=(a[4]||'IN').toUpperCase();
+        const old=$('#lAC').querySelector(`[data-slot="${slot}"]`);
+        if(dir==='OUT'){ if(old) old.remove(); break; }
+        const el=await buildActor(nm,A.locals);
+        if(!el){ if(old) old.remove(); break; }
+        el.dataset.slot=slot; el.dataset.x=x;
+        if(old) old.replaceWith(el); else $('#lAC').appendChild(el);
+        break; }
+      case 'ACTOR_OUT': {
+        // `[data-slot]`, not `img[data-slot]`: a composed actor is a <div>.
+        const el=$('#lAC').querySelector(`[data-slot="${a[0]||'0'}"]`); if(el) el.remove(); break; }
+      case 'VOICE_PLAY': await playVoice(a[0],A.locals); break;
+      case 'BGM_PLAY': await playBGM(a[0]); break;
+      case 'BGM_STOP': if(S.bgm){S.bgm.pause();S.bgm=null;} break;
+      case 'SE_PLAY': { const e=await resolve(a[0],A.locals);
+        if(e){const s=new Audio(await blobURL(e));s.muted=S.muted;s.volume=.6;s.play().catch(()=>{});} break; }
+      case 'EFFECT_FLASH': flash(a[1]); break;
+      case 'EFFECT_QUAKE': quake(); break;
+      case 'UI_DISP': $('#tbox').classList.toggle('off',(a[0]||'').toUpperCase()==='OFF'); break;
+      case 'SPINE':
+        await setSceneSpine(a[0],a[1]);
+        if(String(a[1]||'IN').toUpperCase()==='OUT'){
+          A.spineRef=''; A.spineAnimation='';
+        }else{
+          A.spineRef=String(a[0]||'').toLowerCase();
+          A.spineAnimation='';
+        }
+        refreshSceneVisualKey(A);
+        break;
+      case 'SPINE_ANIMATOR':
+        A.spineAnimation=String(a[0]||'').toLowerCase();
+        if(S.sceneSpineEnabled&&!await setSceneSpineAnimation(a[0]))
+          console.warn('Spine animation not found',a[0]);
+        refreshSceneVisualKey(A);
+        break;
+      case 'TRANSITION': case 'FADE': case 'WAIT': case 'GROUP':
+      case 'LABEL': case 'JUMP':
+      case 'ACTOR_FRONT': case 'DEBUG_STOP': break;      // no-ops / unsupported
+      case 'SCENARIO_END':
+        paint(); clearSceneVisuals(); A.i=A.ops.length; updatePos(); return;
+      case 'PAUSE': paint(); pushLog(); A.text=''; updatePos();
+        if(A.auto) A.timer=setTimeout(()=>run(),Math.max(900,(A.lastLen||30)*55));
+        return;
+      default: break;
+    }
+  }
+  paint(); updatePos();
+}
+/* ADV dialogue is script text, which the translation pipeline does not cover, so
+   it stays Japanese in every mode. That is fine, but the document declares
+   `<html lang="en">` for the English UI chrome, and a browser's page translator
+   decides what to translate from the declared language — so it saw an English
+   page and left the Japanese dialogue alone. Marking the text box with the
+   language of its actual CONTENT is what lets Chrome/Edge translate it, and is
+   also what a screen reader needs.
+
+   Each line is still passed through localText first: dialogue has no entry today,
+   but if the pipeline ever covers scene text it drops in here with no further
+   change, and the lang flips to `en` on its own. */
+function paint(){
+  const A=S.adv; if(!A) return;
+  const name=localText(A.name||''), text=localText(A.text||'');
+  const jp=/[぀-ヿ一-鿿]/;
+  $('#tname').textContent=name;
+  $('#ttext').textContent=text;
+  $('#tname').lang=jp.test(name)?'ja':'en';
+  $('#ttext').lang=jp.test(text)?'ja':'en';
+  A.lastLen=text.length;
+}
+/* Every dialogue beat of the loaded scene, in order, as static text.
+
+   The reason this exists: the dialogue box holds one line, replaced on each
+   advance. A browser page-translator translates what is in the DOM when asked, so
+   it can only ever catch the line showing at that moment and loses it on the next
+   step. Rendering the whole script at once gives it a single stable surface.
+
+   Translating dialogue in our own pipeline is not an option at this scale —
+   roughly 1.4M lines and 21.9M characters across all scenes, on the order of 15M
+   tokens against a 200k/day quota. */
+function buildScript(){
+  const A=S.adv, box=$('#script');
+  box.textContent='';
+  if(!A){ box.textContent='No scene loaded.'; return; }
+  const hd=document.createElement('div'); hd.className='hd'; hd.lang='en';
+  const entries=[];
+  let name='', text='';
+  for(const o of A.ops){
+    if(o.t==='NAME_PLATE') name=(o.a[0]||'').trim();
+    else if(o.t==='TEXT') text+=(text?'\n':'')+o.a.join(',');
+    else if(o.t==='TXT_CLEAR'){ name=''; text=''; }
+    else if(o.t==='PAUSE'){
+      if(text.trim()) entries.push({name,text});
+      text='';
+    }
+  }
+  if(text.trim()) entries.push({name,text});
+  hd.textContent=`${A.name||''} — ${entries.length} line${entries.length===1?'':'s'}`;
+  box.appendChild(hd);
+  const jp=/[぀-ヿ一-鿿]/;
+  const fr=document.createDocumentFragment();
+  for(const e of entries){
+    const d=document.createElement('div'); d.className='e';
+    if(e.name){
+      const b=document.createElement('b');
+      b.textContent=localText(e.name); b.lang=jp.test(b.textContent)?'ja':'en';
+      d.appendChild(b);
+    }
+    const pp=document.createElement('p');
+    pp.textContent=localText(e.text); pp.lang=jp.test(pp.textContent)?'ja':'en';
+    d.appendChild(pp); fr.appendChild(d);
+  }
+  box.appendChild(fr);
+}
+
+function pushLog(){
+  const A=S.adv; if(!A||!A.text) return;
+  A.log.push({name:A.name,text:A.text,i:A.i});
+  if(A.log.length>600) A.log.shift();
+}
+function updatePos(){
+  const A=S.adv; if(!A) return;
+  const done=A.stops.filter(x=>x<A.i).length;
+  if(S.cgMode){
+    const pause=Math.max(-1,done-1);
+    const at=A.cgStops.findLastIndex(x=>x.pause<=pause);
+    $('#seek').value=Math.max(0,at);
+    $('#pos').textContent=`${Math.max(0,at+1)} / ${A.cgStops.length} CG`;
+  }else{
+    $('#seek').value=Math.max(0,done-1);
+    $('#pos').textContent=`${done} / ${A.stops.length}`;
+  }
+}
+/* Re-run from the top up to a target stop — the only safe way to seek, since
+   every line mutates layer state. Audio is suppressed while fast-forwarding. */
+async function seekTo(stopIdx){
+  const A=S.adv; if(!A) return;
+  const target=A.stops[Math.max(0,Math.min(stopIdx,A.stops.length-1))]??A.ops.length;
+  stopAll(); resetStage();
+  A.i=0; A.text=''; A.name=''; A.log=[];
+  const wasMuted=S.muted, wasAuto=A.auto;
+  S.muted=true; A.auto=false;                 // silent, non-scheduling fast-forward
+  let guard=0;
+  while(A.i<=target && A.i<A.ops.length && ++guard<20000){
+    const before=A.i;
+    await run();
+    if(A.i<=before) break;                    // no progress -> stop rather than spin
+  }
+  S.muted=wasMuted; A.auto=wasAuto;
+  // anything started while muted must follow the real mute state again
+  for(const k of ['audio','bgm','voice']) if(S[k]) S[k].muted=S.muted;
+  paint(); updatePos();
+}
+
+function adjacentScene(step=1){
+  const keys=S.view.includes(S.sel)?S.view:S.order;
+  const at=keys.indexOf(S.sel),next=at+step;
+  if(at<0||next<0||next>=keys.length) return null;
+  return keys[next];
+}
+async function cgSceneStep(direction){
+  const A=S.adv; if(!A||running) return;
+  const pause=Math.max(-1,A.stops.filter(x=>x<A.i).length-1);
+  let target;
+  if(direction<0){
+    target=[...A.cgStops].reverse().find(x=>x.pause<pause);
+    if(!target) target=A.cgStops[0];
+  }else target=A.cgStops.find(x=>x.pause>pause);
+  if(target){await seekTo(target.pause);return;}
+  if(direction>0){
+    const next=adjacentScene(1);
+    if(next) await openScene(next); else toast('This is the last scene');
+  }
+}
+async function sceneStep(direction){
+  const A=S.adv; if(!A||running) return;
+  if(S.cgMode){await cgSceneStep(direction);return;}
+  if(direction<0){
+    if(!A.stops.length) return;
+    const done=A.stops.filter(x=>x<A.i).length;
+    await seekTo(Math.max(0,done-2));
+    return;
+  }
+  if(!A.ops.length||A.i>=A.ops.length){
+    const next=adjacentScene(1);
+    if(next) await openScene(next); else toast('This is the last scene');
+    return;
+  }
+  await run();
+  if(A===S.adv&&A.i>=A.ops.length){
+    const next=adjacentScene(1);
+    if(next) await openScene(next); else toast('This is the last scene');
+  }
+}
+
+$('#adv').onclick=()=>{ if(S.cgMode||$('#log').classList.contains('on')) return; run(); };
+$('#cgprev').onclick=e=>{e.stopPropagation();sceneStep(-1);};
+$('#cgnext').onclick=e=>{e.stopPropagation();sceneStep(1);};
+$('#texttoggle').onclick=()=>{
+  const hidden=$('#tbox').classList.toggle('manual-off');
+  const button=$('#texttoggle');
+  button.setAttribute('aria-pressed',String(hidden));
+  button.textContent=hidden?'Show text':'Hide text';
+};
+$('#spinetoggle').onclick=async()=>{
+  S.sceneSpineEnabled=!S.sceneSpineEnabled;
+  const button=$('#spinetoggle');
+  button.setAttribute('aria-pressed',String(S.sceneSpineEnabled));
+  button.textContent=`Spine: ${S.sceneSpineEnabled?'On':'Off'}`;
+  const A=S.adv;
+  if(!S.sceneSpineEnabled){
+    disposeSceneSpine(); $('#lSP').textContent=''; $('#sspinecontrols').hidden=true;
+  }else if(A?.spineRef){
+    const model=findSpineModel(A.spineRef);
+    if(model) await loadSceneSpineModel(model,A.spineAnimation);
+  }
+  if(A){
+    refreshSceneVisualKey(A); indexCGStops(A);
+    $('#seek').max=Math.max(0,(S.cgMode?A.cgStops:A.stops).length-1);
+    updatePos();
+    if(S.cgMode&&!A.visualKey) cgSceneStep(1);
+  }
+};
+$('#cgmode').onclick=()=>{
+  S.cgMode=!S.cgMode;
+  $('#adv').classList.toggle('cgmode',S.cgMode);
+  $('#cgmode').setAttribute('aria-pressed',String(S.cgMode));
+  const A=S.adv;
+  if(A){
+    $('#seek').max=Math.max(0,(S.cgMode?A.cgStops:A.stops).length-1);
+    updatePos();
+    if(S.cgMode&&!A.visualKey) cgSceneStep(1);
+  }
+};
+$('#play').onclick=()=>{const A=S.adv;if(!A)return;A.auto=!A.auto;
+  $('#play').setAttribute('aria-pressed',String(A.auto));
+  $('#play').textContent=A.auto?'❚❚ Auto':'▶ Auto'; if(A.auto) run();};
+$('#rew').onclick=()=>{const A=S.adv;if(!A)return;
+  const done=A.stops.filter(x=>x<A.i).length; seekTo(Math.max(0,done-2));};
+$('#seek').oninput=e=>{
+  const A=S.adv;if(!A)return;
+  const i=+e.target.value;
+  seekTo(S.cgMode?(A.cgStops[i]?.pause??0):i);
+};
+$('#mute').onclick=()=>{S.muted=!S.muted;
+  for(const k of ['audio','bgm','voice']) if(S[k]) S[k].muted=S.muted;
+  $('#mute').setAttribute('aria-pressed',String(S.muted));
+  $('#mute').textContent=S.muted?'🔇':'🔊';};
+$('#sspineanim').onchange=e=>setSceneSpineAnimation(e.target.value);
+$('#sspineplay').onclick=()=>{
+  if(!S.sceneSpine) return;
+  const playing=!S.sceneSpine.playing; S.sceneSpine.setPlaying(playing);
+  $('#sspineplay').textContent=playing?'Pause':'Play';
+  $('#sspineplay').setAttribute('aria-pressed',String(playing));
+};
+$('#logbtn').onclick=()=>{
+  const L=$('#log'); const A=S.adv; if(!A) return;
+  L.classList.toggle('on');
+  if(!L.classList.contains('on')) return;
+  L.textContent='';
+  A.log.slice().reverse().forEach(e=>{
+    const d=document.createElement('div'); d.className='e';
+    const b=document.createElement('b'); b.textContent=e.name||' ';
+    const p=document.createElement('p'); p.textContent=e.text;
+    const j=document.createElement('button'); j.textContent='jump here';
+    j.onclick=()=>{L.classList.remove('on');
+      seekTo(A.stops.filter(x=>x<e.i).length-1);};
+    d.append(b,p,j); L.appendChild(d);
+  });
+};
+$('#widebtn').onclick=()=>setWide(!$('#app').classList.contains('wide'));
+
+/* ---------------------------------------------------------- chrome */
+$('#pick').onclick=pickFolder; $('#reopen').onclick=pickFolder;
+$$('#viewseg button').forEach(b=>b.onclick=()=>setUnitView(b.dataset.view));
+$('#uspineanim').onchange=e=>S.unitSpine?.setAnimation(e.target.value);
+$('#uspineplay').onclick=()=>{
+  if(!S.unitSpine) return;
+  const playing=!S.unitSpine.playing; S.unitSpine.setPlaying(playing);
+  $('#uspineplay').textContent=playing?'Pause':'Play';
+  $('#uspineplay').setAttribute('aria-pressed',String(playing));
+};
+$('#chk').onclick=()=>{const on=$('#ustagewrap').classList.toggle('checker');
+  $('#chk').setAttribute('aria-pressed',String(on));};
+$('#lightbox .close').onclick=closeLightbox;
+const lbIsCut=()=>!$('#lightbox .lbcomp').hidden;
+$('#lightbox .prev').onclick=e=>{e.stopPropagation();
+  lbIsCut()?openCut(S.cutIndex-1):selectArt(S.artIndex-1);};
+$('#lightbox .next').onclick=e=>{e.stopPropagation();
+  lbIsCut()?openCut(S.cutIndex+1):selectArt(S.artIndex+1);};
+$('#lightbox').onclick=e=>{if(e.target===$('#lightbox'))closeLightbox();};
+$$('#fitseg button').forEach(b=>b.onclick=()=>{S.fit=b.dataset.fit;
+  $$('#fitseg button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));showArt();});
+/* Language toggle. EN is disabled until tables/strings_en.json has loaded, so a
+   missing translation file degrades to a visibly-off button rather than a
+   silently untranslated UI. Character grouping keys off the displayed name, so
+   the families have to be rebuilt before the list is redrawn. */
+function syncLangUI(){
+  const en=$('#langseg button[data-lang="en"]');
+  if(!en) return;
+  const n=S.en.size;
+  en.disabled=!n;
+  en.title=n?`English translation — ${n.toLocaleString()} strings`
+             :'No tables/strings_en.json found — run translation/tools/export_strings.py';
+  if(!n&&S.lang==='en') S.lang='ja';
+  $$('#langseg button').forEach(b=>
+    b.setAttribute('aria-pressed',String(b.dataset.lang===S.lang)));
+}
+function setLang(lang){
+  if(lang===S.lang) return;
+  S.lang=lang;
+  localStorage.setItem('tmv-lang',lang);
+  syncLangUI();
+  if(S.metadata.size) buildCharacterFamilies();
+  applyFilter();
+  const u=S.units.get(S.sel);
+  if(u){
+    $('#utitle').textContent=localText(u.meta?.display_name||u.meta?.name)||`Unit ${u.id}`;
+    renderUnitInfo(u); renderVoices(u);
+  }
+}
+$$('#langseg button').forEach(b=>b.onclick=()=>{ if(!b.disabled) setLang(b.dataset.lang); });
+syncLangUI();
+
+/* Collapsing the browser list widens the stage. `#app.wide` already existed for
+   the scene pane's Wide button; this exposes the same state from the brand bar so
+   it works on both tabs, and persists it like the theme. */
+function syncSideUI(){
+  const app=$('#app');
+  const wide=app.classList.contains('wide');
+  $('#sidetoggle')?.setAttribute('aria-pressed',String(!wide));
+  $('#widebtn')?.setAttribute('aria-pressed',String(wide));
+  $('#infotoggle')?.setAttribute('aria-pressed',String(!app.classList.contains('noside')));
+}
+function setWide(on){
+  const app=$('#app'); app.classList.toggle('wide',on);
+  localStorage.setItem('tmv-wide',on?'1':'');
+  syncSideUI(); sizeGrid(); setTimeout(showArt,60);
+}
+function setNoSide(on){
+  const app=$('#app'); app.classList.toggle('noside',on);
+  localStorage.setItem('tmv-noside',on?'1':'');
+  syncSideUI(); if(S.unitSpine) S.unitSpine.resize(); showArt();
+}
+$('#sidetoggle').onclick=()=>setWide(!$('#app').classList.contains('wide'));
+$('#sideshow').onclick  =()=>setWide(false);
+$('#infotoggle').onclick=()=>setNoSide(!$('#app').classList.contains('noside'));
+$('#usidehide').onclick =()=>setNoSide(true);
+$('#usideshow').onclick =()=>setNoSide(false);
+if(localStorage.getItem('tmv-wide')) $('#app').classList.add('wide');
+if(localStorage.getItem('tmv-noside')) $('#app').classList.add('noside');
+syncSideUI();
+
+$('#scriptbtn').onclick=()=>{
+  const box=$('#script'), on=!box.classList.contains('on');
+  if(on) buildScript();
+  box.classList.toggle('on',on);
+  $('#scriptbtn').setAttribute('aria-pressed',String(on));
+  if(on) $('#log').classList.remove('on');
+};
+
+$('#theme').onclick=()=>{const r=document.documentElement;
+  r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';
+  localStorage.setItem('tmv-theme',r.dataset.theme);};
+document.documentElement.dataset.theme=localStorage.getItem('tmv-theme')||'dark';
+
+addEventListener('keydown',e=>{
+  if($('#lightbox').classList.contains('on')){
+    if(e.key==='Escape'){e.preventDefault();closeLightbox();}
+    else if(e.key==='ArrowLeft'){e.preventDefault();
+      lbIsCut()?openCut(S.cutIndex-1):selectArt(S.artIndex-1);}
+    else if(e.key==='ArrowRight'){e.preventDefault();
+      lbIsCut()?openCut(S.cutIndex+1):selectArt(S.artIndex+1);}
+    return;
+  }
+  if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)){if(e.key==='Escape')e.target.blur();return;}
+  if(e.key==='/'){e.preventDefault();$('#q').focus();return;}
+  if(e.key==='\\'){e.preventDefault();$('#sidetoggle').click();return;}
+  if(S.tab!=='units'&&S.adv){
+    if(e.key==='ArrowLeft'){e.preventDefault();sceneStep(-1);return;}
+    if(e.key==='ArrowRight'){e.preventDefault();sceneStep(1);return;}
+    if(e.key===' '||e.key==='Enter'){e.preventDefault();run();return;}
+    if(e.key==='Escape'){$('#log').classList.remove('on');return;}
+  }
+  if(S.tab==='units'){
+    if(/^[1-9]$/.test(e.key)){$$('#poseseg button')[+e.key-1]?.click();return;}
+  }
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+    const i=S.view.indexOf(S.sel); if(i<0) return;
+    const cols=S.tab==='units'?Math.max(1,Math.floor($('#list').clientWidth/72)):1;
+    const d={ArrowRight:1,ArrowLeft:-1,ArrowDown:cols,ArrowUp:-cols}[e.key];
+    const n=S.view[Math.min(S.view.length-1,Math.max(0,i+d))];
+    if(n){e.preventDefault(); S.tab==='units'?openUnit(n):S.tab==='npc'?openNpc(n):openScene(n);
+      $(`#list [data-k="${CSS.escape(n)}"]`)?.scrollIntoView({block:'nearest'});}
+  }
+});
+let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(S.tab==='units')showArt();},140);});
+</script>
+</body>
+</html>
