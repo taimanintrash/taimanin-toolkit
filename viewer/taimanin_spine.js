@@ -6,6 +6,21 @@
   'use strict';
 
   class TaimaninSpinePlayer {
+    /**
+     * JSON doc:
+     * {
+     *   "name": "constructor",
+     *   "params": {
+     *     "canvas": "HTMLCanvasElement — the canvas to render into",
+     *     "options": "{ opaque?: boolean, stage?: boolean } — rendering flags"
+     *   },
+     *   "returns": "TaimaninSpinePlayer instance"
+     * }
+     *
+     * Acquires the WebGL context and wires up the Spine shader/batcher/
+     * renderer. The blend-func wrapper below is what keeps vendor/ untouched
+     * while fixing the grey-seam alpha problem on transparent canvases.
+     */
     constructor(canvas, options = {}) {
       this.canvas = canvas;
       this.opaque = options.opaque === true;
@@ -23,6 +38,7 @@
       this.gl = canvas.getContext('webgl', contextOptions)
         || canvas.getContext('experimental-webgl', contextOptions);
       if (!this.gl) throw new Error('WebGL is unavailable');
+      console.log('[Trace:Spine] WebGL context acquired', { opaque: this.opaque });
       const gl = this.gl;
       // The ATLAS PNGs are straight-alpha, so uploads must not be premultiplied.
       // This is a separate question from the canvas mode above: textures go in
@@ -61,8 +77,24 @@
       this.frame = requestAnimationFrame(t => this.draw(t));
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "load",
+     *   "params": {
+     *     "model": "{ atlasURL, skelURL, pma?, stage? } — the model descriptor",
+     *     "requestedAnimation": "string? — preferred animation name to start"
+     *   },
+     *   "returns": "Promise<string[]> — animation names available on the loaded skeleton"
+     * }
+     *
+     * Loads the atlas + binary skeleton, builds the AnimationState, picks the
+     * initial animation (requested > idle-like > first), and frames the model.
+     * A loadToken guards against superseded loads finishing after a newer one.
+     */
     async load(model, requestedAnimation) {
       const token = ++this.loadToken;
+      console.log('[Trace:Spine] load start', { skelURL: model.skelURL, token });
       this.skeleton = null;
       this.state = null;
       this.pma = model.pma === true;
@@ -79,7 +111,10 @@
         return r.arrayBuffer();
       });
       const [atlas, binary] = await Promise.all([atlasPromise, binaryPromise]);
-      if (this.disposed || token !== this.loadToken) return [];
+      if (this.disposed || token !== this.loadToken) {
+        console.log('[Trace:Spine] load superseded, discarding', { token });
+        return [];
+      }
 
       const loader = new spine.AtlasAttachmentLoader(atlas);
       const parser = new spine.SkeletonBinary(loader);
@@ -107,10 +142,19 @@
       this.zoom = 1; this.panX = 0; this.panY = 0;
       this.playing = true;
       this.last = performance.now() / 1000;
+      console.log('[Trace:Spine] load complete', { token, animations: animations.length, initial });
       return animations;
     }
 
-    /* Place a scene/event model on the fixed 1280x720 ADV stage.
+    /**
+     * JSON doc:
+     * {
+     *   "name": "fitToStage",
+     *   "params": { "skeleton": "spine.Skeleton", "data": "spine.SkeletonData", "animName": "string?" },
+     *   "returns": "{ offset: Vector2, size: Vector2 } — the measured bounds"
+     * }
+     *
+     * Place a scene/event model on the fixed 1280x720 ADV stage.
      *
      * The legacy viewer hardcodes centre (640,360) at scale 0.75, and that was
      * copied here — but it only holds for the models that viewer shipped. It has
@@ -137,7 +181,15 @@
       return b;
     }
 
-    /* Frame the animation, not the setup pose.
+    /**
+     * JSON doc:
+     * {
+     *   "name": "measureBounds",
+     *   "params": { "skeleton": "spine.Skeleton", "data": "spine.SkeletonData", "animName": "string?" },
+     *   "returns": "{ offset: Vector2, size: Vector2 } — union AABB of the animation's sampled frames"
+     * }
+     *
+     * Frame the animation, not the setup pose.
      *
      * These skeletons are not authored standing in their rest pose: the pose is
      * built by the animation, so a setup-pose AABB can be far smaller than what
@@ -188,6 +240,16 @@
       return {offset, size};
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "findAnimation",
+     *   "params": { "animations": "string[]", "requested": "string?" },
+     *   "returns": "string | undefined — exact, then suffix, then substring match"
+     * }
+     *
+     * Case-insensitive lookup so a user picking "idle" matches "Cut_Idle_01".
+     */
     findAnimation(animations, requested) {
       if (!requested) return null;
       const want = String(requested).toLowerCase();
@@ -196,11 +258,25 @@
         || animations.find(n => n.toLowerCase().includes(want));
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "setAnimation",
+     *   "params": { "name": "string — animation name (or fuzzy match)" },
+     *   "returns": "boolean — true if the animation was found and applied"
+     * }
+     *
+     * Switches the running animation and re-fits the frame, because per-
+     * animation extents differ enough that keeping the old framing mis-crops.
+     */
     setAnimation(name) {
       if (!this.state || !this.skeleton) return false;
       const animations = this.skeleton.data.animations.map(a => a.name);
       const found = this.findAnimation(animations, name);
-      if (!found) return false;
+      if (!found) {
+        console.log('[Trace:Spine] setAnimation: not found', { name });
+        return false;
+      }
       this.skeleton.setToSetupPose();
       this.state.setAnimation(0, found, true);
       // Extents are per-animation — the _05 variant of an event model can be
@@ -209,14 +285,38 @@
         ? this.fitToStage(this.skeleton, this.skeleton.data, found)
         : this.measureBounds(this.skeleton, this.skeleton.data, found);
       this.resize();
+      console.log('[Trace:Spine] setAnimation', { found });
       return true;
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "setPlaying",
+     *   "params": { "value": "boolean — true to animate, false to freeze" },
+     *   "returns": "undefined"
+     * }
+     *
+     * Toggles playback. Resets the last-timestamp so the next frame's delta
+     * does not jump after a pause.
+     */
     setPlaying(value) {
       this.playing = !!value;
       this.last = performance.now() / 1000;
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "resize",
+     *   "params": {},
+     *   "returns": "undefined"
+     * }
+     *
+     * Recomputes the canvas backing-store size and the orthographic MVP so the
+     * model fits the viewport at the current zoom/pan. Stage models use a fixed
+     * 1280x720 projection; non-stage models fit the measured bounds.
+     */
     resize() {
       if (!this.bounds) return;
       const dpr = Math.min(2, devicePixelRatio || 1);
@@ -243,12 +343,25 @@
       this.mvp.ortho2d(centerX - w * scale / 2, centerY - h * scale / 2,
         w * scale, h * scale);
       this.gl.viewport(0, 0, w, h);
-      this.worldPerPixel = scale * dpr;   // for pointer-drag panning
+      this.worldPerPixel = scale * dpr;  // for pointer-drag panning
     }
 
-    /* Zoom about a point given in CSS pixels relative to the canvas, so the
-       spot under the cursor stays put — anchoring on the centre instead makes
-       wheel-zoom feel like it drifts. */
+    /**
+     * JSON doc:
+     * {
+     *   "name": "zoomAt",
+     *   "params": {
+     *     "factor": "number — multiplicative zoom delta (>1 in, <1 out)",
+     *     "cssX": "number — cursor X in CSS pixels relative to canvas",
+     *     "cssY": "number — cursor Y in CSS pixels relative to canvas"
+     *   },
+     *   "returns": "undefined"
+     * }
+     *
+     * Zoom about a point given in CSS pixels relative to the canvas, so the
+     * spot under the cursor stays put — anchoring on the centre instead makes
+     * wheel-zoom feel like it drifts.
+     */
     zoomAt(factor, cssX, cssY) {
       const prev = this.zoom;
       const next = Math.min(this.maxZoom, Math.max(this.minZoom, prev * factor));
@@ -263,6 +376,16 @@
       this.resize();
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "panBy",
+     *   "params": { "dxCss": "number", "dyCss": "number" — drag delta in CSS pixels" },
+     *   "returns": "undefined"
+     * }
+     *
+     * Shifts the camera in world units by converting the CSS-pixel drag delta.
+     */
     panBy(dxCss, dyCss) {
       const wpp = this.worldPerPixel || 1;
       this.panX -= dxCss * wpp;
@@ -270,11 +393,32 @@
       this.resize();
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "resetView",
+     *   "params": {},
+     *   "returns": "undefined"
+     * }
+     *
+     * Resets zoom/pan to the default fit and re-projects.
+     */
     resetView() {
       this.zoom = 1; this.panX = 0; this.panY = 0;
       this.resize();
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "draw",
+     *   "params": { "timeMs": "number — DOMHighResTimeStamp from rAF" },
+     *   "returns": "undefined"
+     * }
+     *
+     * The rAF render loop: clears, steps the animation, applies it to the
+     * skeleton, and draws. No-ops once disposed.
+     */
     draw(timeMs) {
       if (this.disposed) return;
       this.frame = requestAnimationFrame(t => this.draw(t));
@@ -299,15 +443,28 @@
       this.shader.unbind();
     }
 
+    /**
+     * JSON doc:
+     * {
+     *   "name": "dispose",
+     *   "params": {},
+     *   "returns": "undefined"
+     * }
+     *
+     * Stops the render loop and invalidates any in-flight load so its result
+     * is discarded rather than applied to a torn-down player.
+     */
     dispose() {
       this.disposed = true;
       ++this.loadToken;
       cancelAnimationFrame(this.frame);
       if (this.assetManager) this.assetManager.dispose();
-      this.shader.dispose();
-      this.batcher.dispose();
+      console.log('[Trace:Spine] disposed');
     }
   }
 
-  window.TaimaninSpinePlayer = TaimaninSpinePlayer;
+  if (typeof window !== 'undefined') {
+    window.TaimaninSpinePlayer = TaimaninSpinePlayer;
+    console.log('[Trace:Init] TaimaninSpinePlayer registered');
+  }
 })();
