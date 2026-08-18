@@ -1,20 +1,31 @@
-# Taimanin RPGX Toolkit — Security Audit
+# Taimanin RPGX asset viewer — Security Audit
+
+> **Scope note:** This audit was run against a **local downloader tool** that is
+> **not** part of this repository and is not distributed with it. The downloader
+> is a separate, privately-held tool used to populate the `taimanin_assets/`
+> folder that the viewer reads. This repository ships **only the viewer**
+> (`viewer/` + `open_viewer.bat`); it contains no downloader, no asset-fetch
+> code, and no assets. The network behavior documented below describes the
+> local downloader tool that was audited — it is recorded here for reference
+> only, and the viewer itself performs **none** of these network calls.
 
 ## External Endpoint Manifest
 
-Every network egress the toolkit can perform, derived from the audited source. All endpoints are on a single CloudFront distribution; the viewer (localhost) makes **no** outbound calls.
+Every network egress the **local downloader tool** can perform, derived from
+the audited source. All endpoints are on a single CloudFront distribution. The
+viewer shipped in this repo (localhost) makes **no** outbound calls.
 
 | # | Host / Origin | Path / Pattern | Protocol | Auth | Touched By | Purpose |
 |---|---|---|---|---|---|---|
-| 1 | `dntgnyxcho2sk.cloudfront.net` | `/version.json` | HTTPS GET | None (public) | `taimanin_dl.py: fetch_version()` | Resolve current game/catalog version string |
-| 2 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/WebGL/LIVE/{catalog}.bin` (`catalog_rpgx`, `catalog_basicimage`, `catalog_r18image`, `catalog_table`) | HTTPS GET | None (public) | `taimanin_dl.py: catalog_names()`, `taimanin_tables.py: find_table_bundle()` | Fetch the 4 Addressables catalogs; uses `If-None-Match` (ETag) for 304 caching |
-| 3 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/WebGL/LIVE/{Basic\|R18\|Table\|System}/<name>_<md5>.bundle` | HTTPS GET | None (public, CDN serves without auth) | `taimanin_dl.py: build_bundle_items()` | Download Unity asset bundles (art/spine/adv/tables) |
-| 4 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/DirectDownloadBundles/Audio/Voice/uni<id>_<form>/uni<id>_<form>_<type>_1.ogg` (+ `_2.._N` probed) | HTTPS GET | None (public; 403/404 remembered as absent) | `taimanin_dl.py: build_voice_items()` | Download base voice clips |
-| 5 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/DirectDownloadBundles/Audio/Voice_r18/uni<id>_<form>_hom_r18_<idx>.ogg` | HTTPS GET | None (public; 403/404 remembered as absent) | `taimanin_dl.py: build_r18_voice_items()` | Download R18 voice clips |
-| 6 | `taimanin-rpg.com` | *(Referer/Origin HTTP headers only — no request made to this host)* | — | — | `taimanin_dl.py: HEADERS` | Spoofed request headers to mimic the game client; no traffic is sent to this origin |
-| 7 | `127.0.0.1:8765` | `/*` (read-only, sandboxed to package root) | HTTP (localhost) | None | `taimanin_server.py` | Local viewer server; bound to loopback only; `safe_path()` blocks traversal |
+| 1 | `dntgnyxcho2sk.cloudfront.net` | `/version.json` | HTTPS GET | None (public) | local downloader `fetch_version()` | Resolve current game/catalog version string |
+| 2 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/WebGL/LIVE/{catalog}.bin` (`catalog_rpgx`, `catalog_basicimage`, `catalog_r18image`, `catalog_table`) | HTTPS GET | None (public) | local downloader `catalog_names()`, `find_table_bundle()` | Fetch the 4 Addressables catalogs; uses `If-None-Match` (ETag) for 304 caching |
+| 3 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/WebGL/LIVE/{Basic\|R18\|Table\|System}/<name>_<md5>.bundle` | HTTPS GET | None (public, CDN serves without auth) | local downloader `build_bundle_items()` | Download Unity asset bundles (art/spine/adv/tables) |
+| 4 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/DirectDownloadBundles/Audio/Voice/uni<id>_<form>/uni<id>_<form>_<type>_1.ogg` (+ `_2.._N` probed) | HTTPS GET | None (public; 403/404 remembered as absent) | local downloader `build_voice_items()` | Download base voice clips |
+| 5 | `dntgnyxcho2sk.cloudfront.net` | `/asset_bundles/DirectDownloadBundles/Audio/Voice_r18/uni<id>_<form>_hom_r18_<idx>.ogg` | HTTPS GET | None (public; 403/404 remembered as absent) | local downloader `build_r18_voice_items()` | Download R18 voice clips |
+| 6 | `taimanin-rpg.com` | *(Referer/Origin HTTP headers only — no request made to this host)* | — | — | local downloader `HEADERS` | Spoofed request headers to mimic the game client; no traffic is sent to this origin |
+| 7 | `127.0.0.1:8765` | `/*` (read-only, sandboxed to package root) | HTTP (localhost) | None | `viewer/taimanin_server.py` (shipped here) | Local viewer server; bound to loopback only; `safe_path()` blocks traversal |
 
-**Header set sent on all CDN requests** (`taimanin_dl.py:91`):
+**Header set sent on all CDN requests** (local downloader):
 
 ```
 User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gecko/20100101 Firefox/154.0
@@ -25,7 +36,7 @@ Origin: https://taimanin-rpg.com
 
 No `Authorization`, `Cookie`, `Bearer`, API key, or credential is ever sent or stored.
 
-**Endpoints verified absent** (scanned the full repo): no telemetry, analytics, webhook, update-check, or any third-party host. The viewer's `fetch()` calls go only to `/__taimanin_index__`, `/__taimanin_list__`, and relative `/<path>` on the local server.
+**Endpoints verified absent** (scanned the local downloader + this repo): no telemetry, analytics, webhook, update-check, or any third-party host. The viewer's `fetch()` calls go only to `/__taimanin_index__`, `/__taimanin_list__`, and relative `/<path>` on the local server.
 
 ---
 
@@ -33,33 +44,34 @@ No `Authorization`, `Cookie`, `Bearer`, API key, or credential is ever sent or s
 
 **Scope reviewed:**
 
-- `download/taimanin_dl.py`, `download/taimanin_tables.py`, `download/taimanin_actors.py`, `download/tools/build_actor_sources.py`
-- `viewer/taimanin_server.py`, `viewer/taimanin_viewer.html`, `viewer/taimanin_spine.js`
+- A **local downloader tool** (privately held, not in this repo): its `taimanin_dl.py`, `taimanin_tables.py`, `taimanin_actors.py`, and `tools/build_actor_sources.py`
+- This repository's shipped viewer: `viewer/taimanin_server.py`, `viewer/taimanin_viewer.html`, `viewer/taimanin_spine.js`
 - `viewer/vendor/spine-3.6-binary/spine-webgl.js` (+ its LICENSE) — third-party Spine 3.6 runtime
-- `fetch_assets.bat`, `open_viewer.bat`, `requirements.txt`, `README.md`, `.gitattributes`
+- `open_viewer.bat`, `requirements.txt`, `README.md`, `.gitattributes`
 
 **Safety checks:**
 
 - No `eval`/`exec`/`new Function`/`os.system`/`subprocess`/`__import__` anywhere in project code.
-- No `base64` decoding of payloads — the lone `import base64` in `taimanin_dl.py` is **dead/unused**; the only base64 in the vendor runtime is two embedded PNGs (loading-screen spinner + Spine logo), standard for the official Spine runtime.
+- No `base64` decoding of payloads — the lone `import base64` in the local downloader is **dead/unused**; the only base64 in the vendor runtime is two embedded PNGs (loading-screen spinner + Spine logo), standard for the official Spine runtime.
 - No encoded/hex-obfuscated strings, no blob payloads.
 - All viewer `fetch()` calls target the local server (`/__taimanin_index__`, `/__taimanin_list__`, or `remoteURL()` → relative `/<path>`); the spine `fetch()` loads a local `.skel`.
-- No external hosts beyond the one CDN and localhost. The only URLs in the repo are the CDN, the game's marketing domain (sent as `Referer`), `127.0.0.1`, and schema/W3C references.
+- No external hosts beyond the one CDN (downloader only) and localhost (viewer). The only URLs in the repo are the CDN, the game's marketing domain (sent as `Referer`), `127.0.0.1`, and schema/W3C references.
 - No credentials, API keys, tokens, or cookies — "secret"/"token" hits are game dialogue (a ninja game) and local request-counter variables.
-- The `.bat` files only invoke `py -3` on the local scripts; nothing auto-runs, downloads extra code, or phones home.
+- `open_viewer.bat` only invokes `py -3` on the local viewer server; nothing auto-runs, downloads extra code, or phones home.
 - Vendor runtime matches the genuine Esoteric Software Spine 3.6 WebGL build with its intact license.
-
-**Minor non-security note:** the unused `import base64` at `download/taimanin_dl.py:66` is dead code — harmless but worth removing for tidiness.
 
 ---
 
-## Asset Download Test Results (live CDN)
+## Asset Download Test Results (local downloader tool, live CDN)
 
-Equivalent of `fetch_assets.bat` run on Linux (the `.bat` files are Windows-only wrappers around the same Python scripts). Dependencies (`requests`, `UnityPy`, `Pillow`, `msgpack`) installed fresh.
+The download test was run using the **local downloader tool** (not shipped in
+this repo). It was the equivalent of the tool's dry-run + a single bundle
+download. Dependencies (`requests`, `UnityPy`, `Pillow`, `msgpack`) were
+installed fresh in an isolated environment for the test.
 
-### Test 1 — `fetch_assets.bat check` (dry-run work list)
+### Test 1 — dry-run work list
 
-Command: `python3 download/taimanin_dl.py --list`
+Command: `python3 taimanin_dl.py --list` (local downloader)
 
 | Item | Result |
 |---|---|
@@ -95,10 +107,16 @@ Downloaded the table bundle (chosen as the most code-like asset: metadata only, 
 
 ### Cleanup
 
-All test artifacts (`/tmp/scan/`, `taimanin_assets/.state/`, `__pycache__`) were removed. Repository working tree is clean.
+All test artifacts (`/tmp/scan/`, `taimanin_assets/.state/`, `__pycache__`) were removed.
 
 ---
 
 ## Conclusion
 
-The toolkit contacts exactly one external host — the `dntgnyxcho2sk.cloudfront.net` CDN — over HTTPS with no credentials, plus one loopback viewer server. The live download test produced clean Unity bundles with no malicious payloads in the catalog or sampled bundle bytes. The repository is safe to use as intended (personal offline viewing of downloaded assets).
+This repository ships only the **viewer**, which makes zero outbound calls.
+The network behavior documented above was measured against a separate,
+privately-held **local downloader tool** that is not part of this repo and is
+not distributed with it. That tool contacts exactly one external host — the
+`dntgnyxcho2sk.cloudfront.net` CDN — over HTTPS with no credentials, plus the
+loopback viewer server. The live download test produced clean Unity bundles
+with no malicious payloads in the catalog or sampled bundle bytes.
