@@ -1,0 +1,5 @@
+download/
+taimanin_assets/
+fetch_assets.bat
+fetch_assets.sh
+.venv
