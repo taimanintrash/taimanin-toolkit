@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * Opens the unit viewer pane, loads missing voice clips, and initializes art choices.
+ * Called by: setTab, render
+ */
 async function openUnit(k) {
   closeLightbox();
   if (typeof disposeSceneSpine === 'function') disposeSceneSpine();
@@ -61,6 +65,10 @@ async function openUnit(k) {
   else showArt();
 }
 
+/**
+ * Returns sorted array of available art poses and variants for a unit.
+ * Called by: openUnit, selectArt, showArt
+ */
 function artChoices(u) {
   if (!u) return [];
   const out = [];
@@ -76,6 +84,10 @@ const syncArtButtons = () => $$('#poseseg button').forEach(
   b => b.setAttribute('aria-pressed', String(+b.dataset.index === S.artIndex))
 );
 
+/**
+ * Selects a specific art pose index and updates buttons and view.
+ * Called by: poseseg button clicks
+ */
 async function selectArt(index) {
   const u = S.units.get(S.sel), choices = u ? artChoices(u) : [];
   if (!choices.length) return;
@@ -86,6 +98,10 @@ async function selectArt(index) {
   if ($('#lightbox').classList.contains('on') && typeof renderLightbox === 'function') await renderLightbox();
 }
 
+/**
+ * Computes the non-transparent alpha bounding box of an image.
+ * Called by: imageMetrics
+ */
 async function alphaBox(url, key) {
   if (S.bbox.has(key)) return S.bbox.get(key);
   const img = new Image();
@@ -111,6 +127,10 @@ async function alphaBox(url, key) {
   return b;
 }
 
+/**
+ * Extracts natural dimensions and bounding box metrics for an image entry.
+ * Called by: actorContentBounds, showArt
+ */
 async function imageMetrics(entry) {
   if (S.metrics.has(entry.key)) return S.metrics.get(entry.key);
   const url = await blobURL(entry), img = new Image();
@@ -131,6 +151,10 @@ async function imageMetrics(entry) {
   return value;
 }
 
+/**
+ * Renders and positions the active unit art image onto the stage.
+ * Called by: openUnit, selectArt
+ */
 async function showArt() {
   const u = S.units.get(S.sel);
   if (!u) return;

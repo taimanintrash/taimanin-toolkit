@@ -1,11 +1,19 @@
 'use strict';
 
+/**
+ * Pauses and resets all active audio, background music, and voice streams.
+ * Called by: openNpc, openScene, setTab, openUnit
+ */
 function stopAll() {
   if (S.audio) { S.audio.pause(); S.audio = null; }
   if (S.bgm) { S.bgm.pause(); S.bgm = null; }
   if (S.voice) { S.voice.pause(); S.voice = null; }
 }
 
+/**
+ * Closes lightbox, stops audio, and opens a scene view in the player pane.
+ * Called by: setTab, render
+ */
 async function openScene(k) {
   closeLightbox();
   if (typeof disposeUnitSpine === 'function') disposeUnitSpine();

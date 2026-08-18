@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * Builds and renders filter chips based on the active tab.
+ * Called by: setTab
+ */
 function buildChips() {
   const c = $('#chips');
   c.textContent = '';
@@ -32,6 +36,10 @@ function buildChips() {
   for (const [r, label] of RANKS) chip(rankKey(r), label, 'rank');
 }
 
+/**
+ * Switches the active application tab, clears filters, and updates view order.
+ * Called by: bootstrap button clicks
+ */
 function setTab(t, selectedKey = null) {
   S.tab = t;
   S.filters.clear();
@@ -70,6 +78,10 @@ function setTab(t, selectedKey = null) {
   }
 }
 
+/**
+ * Filters the view list based on search queries and active filter chips.
+ * Called by: buildChips, setTab, search input listener
+ */
 function applyFilter() {
   const q = $('#q').value.trim().toLowerCase(), f = S.filters;
   const ranks = new Set(RANKS.filter(([r]) => f.has(rankKey(r))).map(([r]) => r));
@@ -125,6 +137,10 @@ const io = new IntersectionObserver(async es => {
   }
 }, { root: $('#list'), rootMargin: '340px' });
 
+/**
+ * Renders the filtered view list into the DOM grid.
+ * Called by: applyFilter
+ */
 function render() {
   const L = $('#list');
   L.textContent = '';
@@ -171,6 +187,10 @@ function render() {
   sizeGrid();
 }
 
+/**
+ * Adjusts CSS grid auto-rows based on card element dimensions.
+ * Called by: render, ResizeObserver in main.js
+ */
 function sizeGrid() {
   const L = $('#list');
   if (!L.classList.contains('units')) return;
@@ -180,12 +200,20 @@ function sizeGrid() {
   if (w > 0) L.style.gridAutoRows = w + 'px';
 }
 
+/**
+ * Closes the lightbox overlay.
+ * Called by: openNpc, openScene, openUnit
+ */
 function closeLightbox() {
   const box = $('#lightbox');
   box.classList.remove('on');
   box.setAttribute('aria-hidden', 'true');
 }
 
+/**
+ * Synchronizes language UI button states.
+ * Called by: loadTranslations
+ */
 function syncLangUI() {
   const lang = S.lang;
   $$('#langseg button').forEach(b => {

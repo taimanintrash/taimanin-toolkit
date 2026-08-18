@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * Creates or retrieves a blob URL for a file entry.
+ * Called by: buildActor, showArt, render, ingest
+ */
 async function blobURL(e) {
   if (!e) return null;
   if (S.urls.has(e.key)) return S.urls.get(e.key);
@@ -16,6 +20,10 @@ async function blobURL(e) {
   return url;
 }
 
+/**
+ * Lists entries in a lazy directory or remote endpoint.
+ * Called by: openUnit, mapOf
+ */
 async function listLazy(path) {
   const b = S.lazy.get(path);
   if (!b) return [];
@@ -48,6 +56,10 @@ async function listLazy(path) {
 
 const remoteURL = path => '/' + path.split('/').map(encodeURIComponent).join('/');
 
+/**
+ * Creates a remote file entry object with fetch capabilities.
+ * Called by: listLazy, ingest, loadFromServer
+ */
 function remoteEntry(path) {
   return {
     name: baseOf(path),
@@ -62,6 +74,10 @@ function remoteEntry(path) {
   };
 }
 
+/**
+ * Creates a stem-keyed map of file entries for a given path.
+ * Called by: resolve
+ */
 async function mapOf(path) {
   const b = S.lazy.get(path);
   if (!b) return null;
@@ -73,6 +89,10 @@ async function mapOf(path) {
   return m;
 }
 
+/**
+ * Resolves a name against local paths or pool entries.
+ * Called by: resolve
+ */
 async function resolve(name, localPaths = []) {
   if (!name) return null;
   const want = stem(name);
@@ -84,6 +104,10 @@ async function resolve(name, localPaths = []) {
   return S.pool.get(want) || null;
 }
 
+/**
+ * Recursively walks a directory handle to collect files.
+ * Called by: loadDir
+ */
 async function walkDir(dir, path, files) {
   for await (const [name, h] of dir.entries()) {
     const p = path ? path + '/' + name : name;
@@ -98,6 +122,10 @@ async function walkDir(dir, path, files) {
   }
 }
 
+/**
+ * Parses file entries from a file list input.
+ * Called by: bootstrap event listener
+ */
 function fromFileList(list) {
   const files = [];
   for (const f of list) {
@@ -112,6 +140,10 @@ function fromFileList(list) {
   return files;
 }
 
+/**
+ * Retrieves or creates a unit object in the units map.
+ * Called by: indexFile
+ */
 function unitOf(key, id, form) {
   let u = S.units.get(key);
   if (!u) {
@@ -124,6 +156,10 @@ function unitOf(key, id, form) {
   return u;
 }
 
+/**
+ * Indexes an individual file entry into thumbs, art, or voices.
+ * Called by: ingest
+ */
 function indexFile(e) {
   const n = e.name;
   let m;
@@ -150,6 +186,10 @@ function indexFile(e) {
   return false;
 }
 
+/**
+ * Indexes Spine skeletal models and atlases from a file list.
+ * Called by: ingest
+ */
 function indexSpineModels(files) {
   S.spineModels.clear();
   S.spineLoose.clear();
@@ -194,11 +234,19 @@ function indexSpineModels(files) {
   }
 }
 
+/**
+ * Finds a spine model by exact name or loose matching.
+ * Called by: ingest
+ */
 function findSpineModel(name) {
   return S.spineModels.get(String(name || '').toLowerCase())
     || S.spineLoose.get(spineLoose(name)) || null;
 }
 
+/**
+ * Loads English translation strings from file list.
+ * Called by: ingest
+ */
 async function loadTranslations(files) {
   S.en.clear();
   S.enMeta = null;
@@ -216,6 +264,10 @@ async function loadTranslations(files) {
   if (typeof syncLangUI === 'function') syncLangUI();
 }
 
+/**
+ * Loads actor sources JSON configuration.
+ * Called by: ingest
+ */
 async function loadActorSources(files) {
   S.actorSources.clear();
   const hit = files.find(e => e.name.toLowerCase() === 'actor_sources.json');
@@ -232,6 +284,10 @@ async function loadActorSources(files) {
   }
 }
 
+/**
+ * Loads unit metadata tables and builds character indexes.
+ * Called by: ingest
+ */
 async function loadUnitMetadata(files) {
   S.metadata.clear();
   S.characterFamilies.clear();
@@ -260,6 +316,10 @@ async function loadUnitMetadata(files) {
   }
 }
 
+/**
+ * Builds an index of real character IDs by name.
+ * Called by: loadUnitMetadata
+ */
 function buildRealCidIndex() {
   S.realCidByName.clear();
   for (const m of S.metadata.values()) {
@@ -271,6 +331,10 @@ function buildRealCidIndex() {
   }
 }
 
+/**
+ * Determines the character family ID for a unit metadata record.
+ * Called by: buildCharacterFamilies
+ */
 function characterFamilyId(m) {
   const cid = Number(m?.character_id);
   if (cid !== 999) return cid;
@@ -279,22 +343,38 @@ function characterFamilyId(m) {
   return real === undefined ? `name:${n}` : real;
 }
 
+/**
+ * Extracts a unit key from a unit ID string.
+ * Called by: buildSceneUnitIndex, buildCharacterFamilies
+ */
 function unitKeyFromId(id) {
   const m = String(id || '').match(/^uni(\d{5})_(\d+)$/i);
   return m ? keyOf(m[1], m[2]) : null;
 }
 
+/**
+ * Extracts a scene ID from a unit's spine metadata.
+ * Called by: buildSceneUnitIndex
+ */
 function sceneIdFromUnit(u) {
   const m = String(u?.meta?.spine_id || '').match(/^chr_(\d+)$/i);
   return m ? String(+m[1]) : null;
 }
 
+/**
+ * Extracts the NPC prefix from an actor name.
+ * Called by: buildNpcIndex
+ */
 function npcPrefix(name) {
   const b = String(name || '').toLowerCase().replace(/_r18$/, '');
   const m = b.match(/^(.*\d)[a-z]+\d*$/);
   return m ? m[1] : b;
 }
 
+/**
+ * Builds the index of NPCs and their available poses and versions.
+ * Called by: ingest, loadFromServer
+ */
 function buildNpcIndex() {
   S.npcs.clear();
   const add = n => {
@@ -320,6 +400,10 @@ function buildNpcIndex() {
     g.poses.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+/**
+ * Builds the index mapping scene IDs to units.
+ * Called by: ingest
+ */
 function buildSceneUnitIndex() {
   S.sceneUnits.clear();
   for (const u of S.units.values()) {
@@ -332,6 +416,10 @@ function buildSceneUnitIndex() {
   }
 }
 
+/**
+ * Builds character families, unit character mappings, and labels.
+ * Called by: loadUnitMetadata
+ */
 function buildCharacterFamilies() {
   S.characterFamilies.clear();
   S.unitCharacters.clear();
@@ -403,6 +491,10 @@ function buildCharacterFamilies() {
   }
 }
 
+/**
+ * Loads position metadata JSON and attaches positions to file entries.
+ * Called by: ingest
+ */
 async function loadPositionMetadata(files) {
   S.positions.clear();
   const source = files.find(e => e.name.toLowerCase() === 'positions.json');
@@ -422,6 +514,10 @@ async function loadPositionMetadata(files) {
   }
 }
 
+/**
+ * Clears state, indexes files, and runs metadata/actor ingestion pipelines.
+ * Called by: loadFromServer, loadDir, bootstrap
+ */
 async function ingest(files, sceneDefs = []) {
   if (typeof disposeUnitSpine === 'function') disposeUnitSpine();
   if (typeof disposeSceneSpine === 'function') disposeSceneSpine();
@@ -503,6 +599,10 @@ async function ingest(files, sceneDefs = []) {
   toast(`${S.units.size} units · ${S.scenes.size} scenes`);
 }
 
+/**
+ * Prompts the user to pick a directory handle using the File System Access API.
+ * Called by: pickFolder, bootstrap button clicks
+ */
 async function pickFolder() {
   if (window.showDirectoryPicker) {
     let dir;
@@ -513,6 +613,10 @@ async function pickFolder() {
   } else $('#fallback').click();
 }
 
+/**
+ * Attempts to load file index and data automatically from the local server endpoint.
+ * Called by: IIFE bootstrap in main.js
+ */
 async function loadFromServer() {
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return false;
   try {
@@ -532,6 +636,10 @@ async function loadFromServer() {
   }
 }
 
+/**
+ * Reads files from a directory handle and runs ingestion.
+ * Called by: pickFolder, IIFE bootstrap in main.js
+ */
 async function loadDir(dir) {
   $('#scanning').textContent = 'reading…';
   S.lazy.clear();

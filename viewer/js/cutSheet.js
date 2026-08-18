@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * Opens NPC cutsheet view and renders pose thumbnails.
+ * Called by: setTab, render, bootstrap
+ */
 async function openNpc(k) {
   closeLightbox();
   if (typeof disposeSceneSpine === 'function') disposeSceneSpine();
@@ -91,6 +95,10 @@ async function openNpc(k) {
 }
 openNpc._token = 0;
 
+/**
+ * Calculates content bounding bounds for an actor based on its source data.
+ * Called by: openCut
+ */
 async function actorContentBounds(name) {
   const key = String(name || '').toLowerCase();
   if (S.actorBounds.has(key)) return S.actorBounds.get(key);
@@ -126,6 +134,10 @@ async function actorContentBounds(name) {
   return result;
 }
 
+/**
+ * Opens lightbox view for a specific cut pose index.
+ * Called by: openNpc
+ */
 async function openCut(i) {
   const list = S.cutPoses || [];
   if (!list.length) return;
@@ -159,6 +171,10 @@ async function openCut(i) {
   box.setAttribute('aria-hidden', 'false');
 }
 
+/**
+ * Builds and returns a DOM element for an actor source.
+ * Called by: openNpc, openCut, io
+ */
 async function buildActor(name, localPaths = []) {
   const key = String(name || '').toLowerCase();
   const source = S.actorSources.get(key);
